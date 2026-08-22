@@ -52,7 +52,7 @@ DifferentialDrive(float wheelbase, float wheel_radius)
 ### E6. 拼写 / 命名不一致
 ```cpp
 WheelSpeed ws_;   // ❌ WheelSpeeds 拼错
-// ❌ types.hpp 定义 values_/count_，实现里写 values/count → 编译错
+// ❌ contracts.hpp 定义 values_/count_，实现里写 values/count → 编译错
 // ✅ 全库统一一套字段名
 ```
 
@@ -98,7 +98,7 @@ auto ws = chassis.inverse_calc({0.5f, 0.0f, 1.0f});   // ← 触发实例化
 ## 二、正确示例（阶段 1 最终形状）
 
 ```cpp
-// inc/types.hpp —— 数据层：对外契约，POD
+// inc/contracts.hpp —— 数据层：对外契约，POD
 #pragma once
 #include <cstdint>
 
@@ -114,7 +114,7 @@ struct WheelSpeeds {    // 输出：各轮角速度
 
 // inc/drive_differential.hpp —— 行为层：CRTP 统一接口 + 差速实现
 #pragma once
-#include "types.hpp"
+#include "contracts.hpp"
 
 template<typename Derived>
 class Chassis {

@@ -92,7 +92,7 @@ DiffDrive / MecanumDrive / OmniDrive   有物理参数（轮距/轮径/轮数）
 
 ### 结论：基类改名 + 文件角色互换
 ```
-inc/types.hpp          数据层：Twist / WheelSpeeds（POD 契约）
+inc/contracts.hpp          数据层：Twist / WheelSpeeds（POD 契约）
 inc/kinematics.hpp     数学核心：Kinematics<Derived> 基类 + jacobian_apply + k2PI
 inc/drive_diff.hpp     DiffDrive : public Kinematics<DiffDrive>
 inc/drive_mecanum.hpp  MecanumDrive（4×3 J，forward 伪逆展开）

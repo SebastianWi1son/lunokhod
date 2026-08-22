@@ -19,11 +19,11 @@
 
 ```
 kinematics.hpp                    ← 用户唯一需要 #include 的头文件
-├── types.hpp                    ← Twist, WheelSpeeds, 单位定义
+├── contracts.hpp                    ← Twist, WheelSpeeds, 单位定义
 ├── differential_drive.hpp       ← 差速 2WD/4WD 正/逆运动学
 ├── mecanum_drive.hpp            ← Mecanum 4WD 正/逆运动学
 ├── omni_drive.hpp               ← 全向 3/4/N 轮正/逆运动学
-└── speed_limiter.hpp            ← 速度/加速度/Jerk 三级限幅器
+└── speed_limiter.hpp            ← 可选附赠：Twist 空间加速度限幅（非核心）
 ```
 
 ## 统一接口
@@ -95,17 +95,19 @@ Twist forward(const WheelSpeeds& speeds);
        - R·ω] / r
 ```
 
-## SpeedLimiter
+## SpeedLimiter（可选附赠，非核心）
 
-独立的速度/加速度/Jerk 三级限幅器。对 `Vx`、`Vy`、`ω` 分别限幅。
+Twist 空间加速度限幅器（斜坡发生器）：上游指令可任意跳变，输出每通道最多以 `acc·dt` 的斜率平滑变化，保运动学一致性。**不在 chassis.hpp 聚合入口内**，需要时单独 include。
 
 ```cpp
-SpeedLimiter limiter;
-limiter.setMaxVel({2.0f, 1.0f, 3.14f});  // Vx, Vy, ω 上限
-limiter.setMaxAcc({1.0f, 0.5f, 2.0f});   // 加速度上限
+SpeedLimiter limiter(1.0f, 0.5f, 2.0f);   // vx/vy/wz 三通道加速度上限
 
-auto limited = limiter.step(target, dt);  // 平滑限幅
+auto [out, vx_lim, vy_lim, wz_lim] = limiter.limit(cmd, dt);  // 平滑限幅 + 每通道饱和标志
 ```
+
+- v1 范围：**每通道加速度斜坡**（限变化率，保 Twist 几何一致性）。不含速度上限、Jerk、联合约束（功率/安全层职责，属后续）
+- 为什么是小礼包：限幅是应用层策略，行业惯例放上层（ROS 导航栈 acc_lim、驱动器固件 ramping）
+- 完整设计决策与伪代码：`docs/DEV_GUIDE_PSEUDOCODE.md` STAGE 3
 
 ## 刻意不覆盖的范围
 
@@ -149,11 +151,11 @@ kinematics/
 ├── include/
 │   └── kinematics/
 │       ├── kinematics.hpp     ← 用户唯一入口
-│       ├── types.hpp          ← 公共类型定义
+│       ├── contracts.hpp          ← 公共类型定义
 │       ├── differential_drive.hpp
 │       ├── mecanum_drive.hpp
 │       ├── omni_drive.hpp
-│       └── speed_limiter.hpp
+│       └── speed_limiter.hpp   ← 可选附赠（非核心，单独 include）
 ├── examples/
 │   ├── differential_drive_example.cpp
 │   ├── mecanum_drive_example.cpp
@@ -167,10 +169,10 @@ kinematics/
 
 | 阶段 | 内容 | 状态 |
 |------|------|:--:|
-| 1 | `types.hpp` + `differential_drive.hpp` | 待开始 |
-| 2 | `mecanum_drive.hpp` + `omni_drive.hpp` | 待开始 |
-| 3 | `speed_limiter.hpp` | 待开始 |
-| 4 | 单元测试 + 文档 + 示例 | 待开始 |
+| 1 | `contracts.hpp` + `differential_drive.hpp` | 已完成 |
+| 2 | `mecanum_drive.hpp` + `omni_drive.hpp` | 已完成 |
+| 3 | `speed_limiter.hpp`（可选附赠） | STAGE 3 待开发 |
+| 4 | 单元测试 + 文档 + 示例 | 已完成 |
 | 5 | PlatformIO / Arduino 库注册 | 待开始 |
 
 ## 旧项目关系

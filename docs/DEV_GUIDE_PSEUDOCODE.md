@@ -32,13 +32,13 @@ ENDFOR
 1. 建目录：
    kinematics/
    ├── include/kinematics/
-   │   ├── types.hpp
+   │   ├── contracts.hpp
    │   ├── differential_drive.hpp
    │   └── kinematics.hpp          // 唯一入口，先只 include 上面两个
    ├── tests/test_kinematics.cpp
    └── examples/differential_drive_example.cpp
 
-2. types.hpp（不需要模板，现在就能写）：
+2. contracts.hpp（不需要模板，现在就能写）：
    STRUCT Twist { float vx; float vy; float wz; }        // 输入
    STRUCT WheelSpeeds { float values[6]; uint8_t count; } // 输出，定长数组
 
@@ -70,7 +70,7 @@ ENDFOR
 
 5. kinematics.hpp：
    #pragma once
-   #include "types.hpp"
+   #include "contracts.hpp"
    #include "differential_drive.hpp"
 
 6. examples/differential_drive_example.cpp：
@@ -131,30 +131,121 @@ ENDFOR
 
 ---
 
-## STAGE 3：speed_limiter（本库唯一的"状态"）
+## STAGE 3：SpeedLimiter（可选附赠组件 · Twist 空间斜坡发生器）
 
+### 3.1 定位（2026-08 修正）
+
+**小礼包**：可选组件，独立文件 `inc/speed_limiter.hpp`，**不进 chassis.hpp 聚合入口**。
+
+- 为什么是"小礼包"不是核心：限幅是**应用层策略**，不是运动学数学——行业惯例放上层（ROS 导航栈 acc_lim、驱动器固件 ramping），没有一家运动学库内置它
+- 升维机会：THEORY 3.1 分层图里 "Velocity Limiter" 那一格。将来做完整控制系统库（限幅→逆解→里程计→轮PID）时，它升为正式组件；没机会就自己用
+- 核心保持纯净：chassis.hpp 聚合入口 = types + kinematics + 三驱动类，不含它
+
+### 3.2 设计决策（开工前记住，别摇摆）
+
+| 决策点 | 结论 | 为什么 |
+|---|---|---|
+| 限幅对象 | Twist 三通道**独立**限幅（vx/vy/wz） | 运动学一致性：不能在轮速空间限（J 约束会被单个轮子的独立限幅破坏）；三通道独立因各向加速度极限不同 |
+| dt 来源 | `limit(cmd, dt)` **每帧传参** | 与 legacy `pid_calculate(..., dt)` 同风格；实测 dt 自适应，比固定步长灵活 |
+| 构造 | 注入三通道 `max_acc` | 参数构造期定死；不做 setter（除非运行时调参是硬需求——YAGNI） |
+| 状态 | `prev_`（Twist） | 本组件唯一状态：上一帧输出；斜坡必须知道"上次走到哪" |
+| 起步 | 首帧 `prev_ = {0,0,0}` | 从静止起步，0→0.5 按斜坡爬升 |
+| 防御 | `dt <= 0` → 直通返回 cmd | 非法 dt 不冻结不崩；直通是安全侧（不阻挡指令） |
+| clamp | 手写三目 或 `std::clamp` | `<algorithm>` 零成本；嵌入式风格可手写三目 |
+| 复位 | `reset()` 清 prev_ | 停赛后重新起步用；等价 legacy `dsp_traj_reset` |
+| 上报机制 | 方案 a：`LimitResult` 返回式（每通道饱和标志） | 一次拿全、无“事后查询”时序陷阱；匹配“vx 撞墙 wz 没撞”的观测需求；调用方结构化绑定 |
+
+### 3.3 伪代码（完整）
+
+```cpp
+// inc/speed_limiter.hpp —— 可选附赠：Twist 空间加速度限幅器（斜坡发生器）
+// 定位：上游指令（导航/PID/遥控，可任意跳变）→ 平滑斜坡输出 → kinematics inverse
+// 使用：需要时单独 #include "speed_limiter.hpp"（chassis.hpp 不含它）
+
+#include "contracts.hpp"          // Twist
+
+struct LimitResult {              // 限幅输出 + 每通道饱和标志（上报机制）
+    Twist out;                    // 限幅后的速度指令
+    bool  vx_lim, vy_lim, wz_lim; // 对应通道本帧是否被限幅（撞墙）
+};
+
+class SpeedLimiter {
+public:
+    SpeedLimiter(float acc_vx, float acc_vy, float acc_wz)
+        : acc_{acc_vx, acc_vy, acc_wz}, prev_{0, 0, 0} {}
+
+    // 每帧调用：cmd 可跳变，输出每通道最多变化 acc*dt
+    LimitResult limit(const Twist& cmd, float dt) {
+        if (dt <= 0.0f) return {{cmd, false, false, false}};   // 防御：非法 dt 直通
+        LimitResult r;
+        r.out.vx = ramp(cmd.vx, prev_.vx, acc_.vx, dt, r.vx_lim);
+        r.out.vy = ramp(cmd.vy, prev_.vy, acc_.vy, dt, r.vy_lim);
+        r.out.wz = ramp(cmd.wz, prev_.wz, acc_.wz, dt, r.wz_lim);
+        prev_ = r.out;                                          // 状态更新
+        return r;
+    }
+
+    void reset() { prev_ = {0, 0, 0}; }
+
+private:
+    // clamp 到 [prev−acc·dt, prev+acc·dt]，lim 报告是否被夹住
+    static float ramp(float target, float prev, float acc, float dt, bool& lim) {
+        float max_step = acc * dt;              // 本帧最大允许变化量
+        float lo = prev - max_step;
+        float hi = prev + max_step;
+        lim = (target < lo) || (target > hi);
+        return target < lo ? lo : (target > hi ? hi : target);
+    }
+
+    Twist acc_;     // 三通道加速度上限 (m/s², m/s², rad/s²)
+    Twist prev_;    // 上一帧输出（本组件唯一状态）
+};
+
+// 调用方（C++17 结构化绑定）：
+// auto [out, vx_lim, vy_lim, wz_lim] = limiter.limit(cmd, dt);
 ```
-// 目标：平滑限幅，三通道独立
-CLASS SpeedLimiter:
-    state: prev_  (Twist, 初始全 0)
-            max_vel_, max_acc_  (每通道各一组)
 
-    METHOD setMaxVel(vx, vy, wz): 存上限
-    METHOD setMaxAcc(ax, ay, az): 存上限
-    METHOD step(target, dt):
-        FOR each channel c IN [vx, vy, wz]:
-            delta_c = clamp(target.c - prev_.c, -max_acc_.c * dt, +max_acc_.c * dt)
-            prev_.c += delta_c
-        RETURN prev_                    // 限幅后输出（内部也可先夹 max_vel）
+### 3.4 测试锚点（手算有理数）
 
-测试：
-   CHECK 阶跃输入:  target=2.0, a_max=1.0, dt=0.1 → 每步最多走 0.1
-   CHECK 收敛:      连续 step 最终到达 target
-   CHECK 单调:      输出序列不超调、无震荡
-   CHECK 保持:      target 不变时输出不再变化
+| # | 场景 | 输入 | 期望输出序列 | 验证点 |
+|---|---|---|---|---|
+| T1 | 起步爬坡 | cmd=0.5, acc=1, dt=0.1 | 0, 0.1, 0.2, 0.3, 0.4, 0.5 | 斜率 = acc；收敛到目标 |
+| T2 | 停止下坡 | 从 0.5 后 cmd=0 | 0.5, 0.4, ..., 0 | 上升/下降对称 |
+| T3 | 方向反转 | 0.3 → -0.3 | 0.3, 0.2, 0.1, 0, -0.1, -0.2, -0.3 | 过零平滑无跳变 |
+| T4 | 未饱和跟踪 | 0.1 → 0.15（acc 大） | 0.1, 0.15 | 慢变指令直通（限幅器不该拖后腿） |
+| T5 | 三通道独立 + 上报 | vx 大幅跳变 | vx 序列按斜坡，且 **vx_lim==true、vy_lim==false、wz_lim==false** | 通道隔离 + 饱和标志正确 |
+| T6 | 保持 | target 连续不变 | 输出不变 | 稳态无漂移 |
 
-验收：全绿。注意 dt 非法值（0/负）防御：IF dt <= 0 RETURN prev_
-```
+测试方式：`test/test_speed_limiter.cpp`，同样 ALL PASS + 退出码 0 + -Werror。
+
+### 3.5 与 legacy dsp_ramp_t 的对照（你已经写过的东西）
+
+| | legacy `dsp_ramp_t` | SpeedLimiter |
+|---|---|---|
+| 通道 | 单通道标量 | Twist 三通道 |
+| 状态 | prev_out | prev_ |
+| 接口 | `calc(ramp, target, dt)` | `limit(cmd, dt)` |
+| 作用域 | 轮速空间（wheel 层） | **Twist 空间（上层）** |
+
+**两级限幅架构**：上层 SpeedLimiter（Twist 空间，保运动学一致性）+ 下层 legacy dsp_traj（轮速空间 S 曲线，电机最后防线）——行业标准，你的 2024 代码已实现后半级。
+
+### 3.6 命名评估（练手）
+
+| 候选名 | 语义 | 评价 |
+|---|---|---|
+| `SpeedLimiter` | 限"速度" | 易与 max_vel（限速）混淆——它实际限的是**变化率** |
+| `AccelLimiter` | 限加速度 | 最准确；但行为上是斜坡（ramp），名字是限幅（limiter） |
+| `SlewRateLimiter` | slew rate = 变化率 | 行业术语，准确但英文门槛 |
+| `RampFilter` | 斜坡滤波 | 弱化"限制"语义 |
+
+方法名对照：`limit()` / `step()` / `update()`——legacy 风格是 `wheel_update` / `pid_calculate` / `dsp_ramp_calc`。命名三原则评估后自选，把结论写进 AGENT.md。
+
+### 3.7 验收标准
+
+1. `-Werror` 零警告；T1~T6 全 PASS，退出码 0
+2. chassis.hpp 聚合入口**不含** speed_limiter（核心纯净）
+3. DESIGN.md 架构树标注"可选附赠，非核心"（文档定位一致化）
+4. examples/ 提供调用示范：链路 `limiter → inverse → 打印`（下一步的仿真演示素材）
 
 ---
 
