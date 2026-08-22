@@ -21,6 +21,6 @@ target_compile_options(test_wheel PRIVATE -Wall -Wextra -Werror)
 # 示例（链式：含电机模型仿真）
 add_executable(example_wheel
         examples/example_wheel.cpp
-        src/pid.cpp)
+)
 target_link_libraries(example_wheel PRIVATE wheel)
 target_compile_options(example_wheel PRIVATE -Wall -Wextra -Werror)
