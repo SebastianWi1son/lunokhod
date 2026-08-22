@@ -1,3 +1,6 @@
-.idea/ # 以后永远忽略
+# 构建产物
 cmake-build-debug/
 build/
+
+# IDE（.gitignore 不支持行尾注释，注释必须独占一行）
+.idea/
