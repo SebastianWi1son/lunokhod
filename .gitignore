@@ -1,0 +1,7 @@
+# 构建产物
+build/
+cmake-build-debug/
+
+# IDE
+.idea/
+*.iml
