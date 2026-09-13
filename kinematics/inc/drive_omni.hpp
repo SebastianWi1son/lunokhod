@@ -21,13 +21,23 @@ public:
     }
 
     Twist forward_impl(const WheelSpeeds &ws_fb) const {
+        // 通用 N 轮伪逆（对任意 N、任意 γ 成立；N=3,γ=0 时化简为旧特例公式）
+        //   vx = (2/N)·Σ(-sin th_i)·u_i
+        //   vy = (2/N)·Σ( cos th_i)·u_i
+        //   wz = Σ u_i / (N·cr)
         Twist t;
-        const float u0 = wr_ * ws_fb.values_[0];
-        const float u1 = wr_ * ws_fb.values_[1];
-        const float u2 = wr_ * ws_fb.values_[2];
-        t.vx_ = (u2 - u1) / 1.7320508f;        // √3
-        t.vy_ = (2.0f * u0 - u1 - u2) / 3.0f;
-        t.wz_ = (u0 + u1 + u2) / (3.0f * cr_);
+        float sx = 0.0f, sy = 0.0f, sw = 0.0f;
+        for (uint8_t i = 0; i < wn_; ++i) {
+            float th = (i * k2PI) / wn_ + gamma_;
+            float u  = wr_ * ws_fb.values_[i];
+            sx += -sinf(th) * u;
+            sy +=  cosf(th) * u;
+            sw +=  u;
+        }
+        const float n = wn_;
+        t.vx_ = 2.0f * sx / n;
+        t.vy_ = 2.0f * sy / n;
+        t.wz_ = sw / (n * cr_);
         return t;
     }
 

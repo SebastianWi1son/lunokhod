@@ -85,6 +85,18 @@ static void test_omni() {
     auto s0 = omni.inverse_kinematics({0.0f, 0.0f, 0.0f});
     for (int i = 0; i < 3; ++i)
         CHECK(close(s0.values_[i], 0.0f));
+
+    // 通用 forward 验证（修复后）：n=4 互逆 + γ≠0 互逆
+    OmniDrive omni4(4, 0.15f, 0.0f, 0.03f);
+    auto back4 = omni4.forward_kinematics(omni4.inverse_kinematics(cmd));
+    CHECK(close(back4.vx_, 0.3f));
+    CHECK(close(back4.vy_, 0.2f));
+    CHECK(close(back4.wz_, 0.5f));
+    OmniDrive omni_g(3, 0.15f, 3.14159265f / 6.0f, 0.03f);   // γ=30°
+    auto backg = omni_g.forward_kinematics(omni_g.inverse_kinematics(cmd));
+    CHECK(close(backg.vx_, 0.3f));
+    CHECK(close(backg.vy_, 0.2f));
+    CHECK(close(backg.wz_, 0.5f));
 }
 
 int main() {
