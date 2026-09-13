@@ -17,4 +17,10 @@ target_compile_options(test_kinematics PRIVATE -Wall -Wextra -Werror)
 # Example: another individual executable file with main
 add_executable(example_diff examples/example.cpp)
 target_link_libraries(example_diff PRIVATE kinematics)
+target_compile_options(example_diff PRIVATE -Wall -Wextra -Werror)
+
+# L3 仿真 demo（三底盘 2D 位姿积分）
+add_executable(simulation_demo examples/simulation_demo.cpp)
+target_link_libraries(simulation_demo PRIVATE kinematics)
+target_compile_options(simulation_demo PRIVATE -Wall -Wextra -Werror)
 
