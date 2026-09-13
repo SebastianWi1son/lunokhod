@@ -91,6 +91,17 @@ static void test_defense() {
     CHECK(!good.is_vx_lim_);
 }
 
+static void test_reset() {
+    // reset：清状态后从零重新爬坡（新加：覆盖 reset 路径）
+    TwistAccLimiter lim(1.0f, 1.0f, 1.0f);
+    for (int i = 0; i < 5; ++i) lim.limit({0.5f, 0.0f, 0.0f}, 0.1f);  // 爬到 0.5
+    lim.reset();
+    auto r = lim.limit({0.5f, 0.0f, 0.0f}, 0.1f);
+    CHECK(close(r.out_.vx_, 0.1f));          // 重新从 0 爬
+    CHECK(r.is_vx_lim_);
+    CHECK(!r.is_vy_lim_ && !r.is_wz_lim_);
+}
+
 int main() {
     test_t1_ramp_up();
     test_t2_ramp_down();
@@ -99,6 +110,7 @@ int main() {
     test_t5_channel_iso();
     test_t6_hold();
     test_defense();
+    test_reset();
     if (fails == 0) printf("ALL PASS ✅\n");
     else printf("%d FAILS ❌\n", fails);
     return fails == 0 ? 0 : 1;
