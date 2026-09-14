@@ -25,13 +25,17 @@ generated: false
 ## 架构
 
 ```
-kinematics.hpp                    ← 用户唯一需要 #include 的头文件
-├── contracts.hpp                    ← Twist, WheelSpeeds, 单位定义
-├── differential_drive.hpp       ← 差速 2WD/4WD 正/逆运动学
-├── mecanum_drive.hpp            ← Mecanum 4WD 正/逆运动学
-├── omni_drive.hpp               ← 全向 3/4/N 轮正/逆运动学
-└── speed_limiter.hpp            ← 可选附赠：Twist 空间加速度限幅（非核心）
+kinematics.hpp                    ← 用户唯一需要 #include 的头文件（聚合入口）
+├── contracts.hpp                ← Twist, WheelSpeeds, Pose, 单位定义
+├── drive_diff.hpp               ← 差速 2WD/4WD 正/逆运动学
+├── drive_mecanum.hpp            ← Mecanum 4WD 正/逆运动学
+├── drive_omni.hpp               ← 全向 3/4/N 轮正/逆运动学
+└── odometry.hpp                 ← 轮速 → 位姿积分（半隐式欧拉）
 ```
+
+> **限幅器不在本库**。它已演化为独立模块 `control/twist_acc_limiter/`（STATIC 库）
+> —— 限幅是**应用层策略**，不是运动学数学（行业惯例放上层：ROS 导航栈 acc_lim、
+> 驱动器固件 ramping）。差异清单见 `control/twist_acc_limiter/docs/IMPL.md` 的「与设计文档的差异」。
 
 ## 统一接口
 
@@ -151,35 +155,42 @@ auto [out, vx_lim, vy_lim, wz_lim] = limiter.limit(cmd, dt);  // 平滑限幅 + 
 
 ```
 kinematics/
-├── docs/
-│   ├── DESIGN.md              ← 本文件
-│   └── THEORY.md  ← 理论参考资料
-├── include/
-│   └── kinematics/
-│       ├── kinematics.hpp     ← 用户唯一入口
-│       ├── contracts.hpp          ← 公共类型定义
-│       ├── differential_drive.hpp
-│       ├── mecanum_drive.hpp
-│       ├── omni_drive.hpp
-│       └── speed_limiter.hpp   ← 可选附赠（非核心，单独 include）
+├── inc/                           ← 头文件（纯 header，无 .cpp）
+│   ├── kinematics.hpp             ← 用户唯一入口（聚合）
+│   ├── chassis.hpp                ← 底盘门面（统一接口）
+│   ├── contracts.hpp              ← 公共类型：Twist / WheelSpeeds / Pose
+│   ├── drive_diff.hpp             ← 差速 2WD/4WD
+│   ├── drive_mecanum.hpp          ← Mecanum 4WD
+│   ├── drive_omni.hpp             ← 全向 3/4/N 轮
+│   └── odometry.hpp               ← 轮速 → 位姿积分
+├── test/
+│   ├── test_kinematics.cpp        ← 行为锚点测试
+│   ├── test_odometry.cpp          ← 140 断言（外部 oracle 金标）
+│   ├── odometry_golden.hpp        ← 生成物，禁止手改
+│   └── tools/gen_odometry_golden.py  ← 金标生成器（幂等，带五重自检）
 ├── examples/
-│   ├── differential_drive_example.cpp
-│   ├── mecanum_drive_example.cpp
-│   └── dual_sensor_fusion.cpp ← SensorFusion 模板（**至今未实现**；原 `sensor_fusion/` 已移入 `trash/`）
-├── tests/
-│   └── test_kinematics.cpp
-└── README.md
+│   ├── example.cpp
+│   └── simulation_demo.cpp        ← 全链仿真（逆解 → 轮子 → 正解 → 里程计）
+├── tools/
+│   ├── odometry_demo.cpp          ← 四段场景 → run.csv
+│   └── plot_odometry.py           ← CSV → 四格图
+├── docs/                          ← DESIGN / THEORY / ODOMETRY_DESIGN / DEV_GUIDE / IMPL + log/
+└── legacy/                        ← 2024 年 C 语言巡线实现（只读参考，不许改）
 ```
+
+> **2026-09-14 修正**：本表原先写 `include/kinematics/`、`tests/`、`README.md`（均不存在），
+> 以及已改名 / 已迁出的旧文件名 —— 与实际全不符。见 `IMPL.md` §7 漂移清单。
 
 ## 开发计划
 
 | 阶段 | 内容 | 状态 |
 |------|------|:--:|
-| 1 | `contracts.hpp` + `differential_drive.hpp` | 已完成 |
-| 2 | `mecanum_drive.hpp` + `omni_drive.hpp` | 已完成 |
-| 3 | `speed_limiter.hpp`（可选附赠） | STAGE 3 待开发 |
+| 1 | `contracts.hpp` + `drive_diff.hpp`（当时叫 differential_drive） | 已完成 |
+| 2 | `drive_mecanum.hpp` + `drive_omni.hpp` | 已完成 |
+| 3 | 加速度限幅 → **迁出为独立模块** `control/twist_acc_limiter/` | 已完成（非本库） |
 | 4 | 单元测试 + 文档 + 示例 | 已完成 |
 | 5 | PlatformIO / Arduino 库注册 | 待开始 |
+| 6 | `odometry.hpp` 轮速里程计（当时未规划） | 已完成（2026-09-14） |
 
 ## 旧项目关系
 

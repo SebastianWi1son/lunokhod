@@ -103,12 +103,12 @@ if (dt <= 0.0f) {
 
 | # | 设计文档说（DEV_GUIDE STAGE 3 / DESIGN.md / ARCHITECTURE.md） | 代码现实 |
 |---|---|---|
-| 1 | kinematics 内 `inc/speed_limiter.hpp`，header-only，STAGE 3"待开发" | 独立模块 `control/twist_acc_limiter/`，.hpp+.cpp 声明定义分离，STATIC 库 |
+| 1 | kinematics 内 `speed_limiter.hpp`（当时名，header-only），STAGE 3“待开发” | 独立模块 `control/twist_acc_limiter/`，.hpp+.cpp 声明定义分离，STATIC 库。**设计文档已于 2026-09-14 回改** |
 | 2 | 类名 `SpeedLimiter` | `TwistAccLimiter`（不在 3.6 命名候选表内，最终命名未回写任何决策记录） |
 | 3 | `LimitResult { out; vx_lim, vy_lim, wz_lim; }` | `LimitResult { out_; is_vx_lim_, is_vy_lim_, is_wz_lim_; }`（字段名不同） |
 | 4 | dt≤0 直通返回、**不更新** prev_ | 直通**且** `prev_ = t_cmd`（修复回跳 bug，含回归测试；伪代码是过时真相） |
 | 5 | 结构化绑定用法 `auto [out, vx_lim, ...] = limiter.limit(...)` | 实际代码/测试用 `r.out_`、`r.is_vx_lim_` 成员访问 |
-| 6 | DESIGN.md 架构树把 speed_limiter.hpp 画在 kinematics 内 | 已迁出，DESIGN.md 未回改 |
+| 6 | DESIGN.md 架构树把 speed_limiter.hpp 画在 kinematics 内 | ✅ **2026-09-14 已回改**（DESIGN.md §架构 现写 `control/twist_acc_limiter/`） |
 | 7 | 上报机制"方案 a LimitResult 返回式" | ✅ 一致，已实现（AGENTS.md 记录的选型落地） |
 
 ## 7. 问题清单（只记录，不修改）

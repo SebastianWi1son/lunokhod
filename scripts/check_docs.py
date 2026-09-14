@@ -43,6 +43,9 @@ SRC_EXT = r"(?:cpp|hpp|hh|h|cc|c|py|md|txt|cmake|yml|yaml|json|sh)"
 LINE_REF = re.compile(
     rf"[\w./-]+\.{SRC_EXT}\s*:\s*\d+(?:\s*-\s*\d+)?"
 )
+# 中文写法的行号：「第 68 行」—— 同一种锚定，同样会烂，不能漏
+LINE_REF_CN = re.compile(r"第\s*\d+\s*行")
+LINE_RES = (LINE_REF, LINE_REF_CN)
 # markdown 本地链接
 MD_LINK = re.compile(r"\[[^\]]*\]\(\s*<?([^)>\s]+)>?(?:\s+\"[^\"]*\")?\s*\)")
 # 反引号里的内容
@@ -53,6 +56,10 @@ PATHY = re.compile(rf"^[\w.-]+(?:/[\w.-]+)+\.{SRC_EXT}$")
 # 只认【带已知扩展名】的，避开 "每个组件的 DESIGN.md" 这类泛指以外的噪声
 BARE = re.compile(rf"^[\w.-]+\.{SRC_EXT}$")
 FENCE = re.compile(r"^\s*(?:```|~~~)")
+# 显式标注为「计划中」的行 —— 这些行里的文件名是路线图，不是在声称仓库里有。
+# 例：结构树里写 `⬜ mat3.hpp（批次 4）`。
+PLANNED_MARKS = ("⬜",)
+
 # 代码块里不带反引号的文件名（目录树 / 架构图 / 构建命令）
 BARE_ANY = re.compile(rf"[\w./-]+\.{SRC_EXT}\b")
 
@@ -79,6 +86,30 @@ def tracked_files(root: Path):
         return {p for p in out.split("\0") if p}
     except Exception:  # 非 git 环境（打包分发等）→ 退回扫盘
         return {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}
+
+
+def is_external(root: Path, tok: str) -> bool:
+    """这个路径是否落在【被 gitignore 的目录】下 —— 那是外部引用，不是对本仓的声称。
+
+    为什么需要：`reference/` 这类目录按 `.gitignore` 就不入库，文档里引用它是
+    合法的（叫人去本地那个目录看源码）。不区分的话，这类引用永远过不了门禁。
+
+    判据交给 git 自己（`check-ignore`），不再维护一份“外部路径前缀”白名单
+    —— 那份名单会与 `.gitignore` 各说各话。
+    """
+    if tok in _IGNORE_CACHE:
+        return _IGNORE_CACHE[tok]
+    try:
+        r = subprocess.run(["git", "-C", str(root), "check-ignore", "-q", tok],
+                           capture_output=True)
+        ok = r.returncode == 0
+    except Exception:
+        ok = False
+    _IGNORE_CACHE[tok] = ok
+    return ok
+
+
+_IGNORE_CACHE = {}
 
 
 def collect(root: Path):
@@ -143,6 +174,13 @@ def tokens(text: str, allow_bare: bool):
             continue
         if PATHY.match(tok) or (allow_bare and BARE.match(tok)):
             yield tok
+
+
+def drop_planned(text: str) -> str:
+    """去掉显式标注为「计划中」的行（含 ⬜ 的行）——
+    那些行里的文件名是路线图，不是在声称仓库里已经有。"""
+    return "\n".join(ln for ln in text.splitlines()
+                     if not any(mk in ln for mk in PLANNED_MARKS))
 
 
 def bare_names(fenced: str):
@@ -210,8 +248,9 @@ def check(paths, root):
 
         # ── R3 禁止行号引用（§6④）—— 只有 log 豁免；类未知时照样查 ──
         if cls != "log":
-            for m in LINE_REF.finditer(body):
-                errors.append(("R3", rel, f"出现行号引用 `{m.group(0)}`（§6④ 禁止行号）"))
+            for pat in LINE_RES:
+                for m in pat.finditer(body):
+                    errors.append(("R3", rel, f"出现行号引用 `{m.group(0)}`（§6④ 禁止行号）"))
 
         # ── R4 本地链接必须存在（§7）──
         for m in MD_LINK.finditer(body):
@@ -230,11 +269,14 @@ def check(paths, root):
         #   · 代码块里的文件名（目录树 / 架构图不带反引号）→ 在声称仓库布局 → 查
         #   但正文里的裸文件名不查 —— 它多半出现在改名记录 / 漂移清单里，是正确的历史记录。
         if cls != "log":
-            cands = set(tokens(body, allow_bare=False)) | set(bare_names(fenced))
+            cands = set(tokens(drop_planned(body), allow_bare=False)) \
+                | set(bare_names(drop_planned(fenced)))
             for tok in sorted(cands):
                 if tok in tracked or Path(tok).name in basenames:
                     continue
                 if (p.parent.relative_to(root) / tok).as_posix() in tracked:  # 相对这份文档的写法
+                    continue
+                if is_external(root, tok):  # 落在 gitignore 下 → 外部引用，不是在声称本仓有
                     continue
                 errors.append(("R5", rel, f"引用了不存在的文件：`{tok}`"))
 
@@ -320,7 +362,8 @@ WHY = """\
 
 不受管：trash/（待裁决）· reference/（供应商）· legacy/（冻结参考）· build/
 
-存量违规记在 scripts/doc_lint_baseline.txt（债务清单）：只减不增。
+存量违规记在 scripts/doc_lint_baseline.txt（豁免清单）：只该装【有理由的例外】，
+不该装【还没修的债】—— 债要还，例外要写清理由。
 """
 
 
@@ -354,7 +397,7 @@ def main():
     print(f"受管 {len(paths)} 个 md（跳过 {skipped} 个：trash/ reference/ legacy/ build/）")
     if load_baseline():
         n_debt = sum(load_baseline().values())
-        print(f"债务清单 {len(load_baseline())} 条 / 共 {n_debt} 处（只减不增）")
+        print(f"豁免清单 {len(load_baseline())} 条 / 共 {n_debt} 处（有理由的例外，不是未修的债）")
     print()
 
     if args.verbose:
@@ -373,12 +416,12 @@ def main():
     if shrunk:
         print()
         for rule, path, was, now in shrunk:
-            print(f"ℹ️  债务减少：{rule} {path} —— baseline 写 {was}，实际 {now}。"
+            print(f"ℹ️  豁免减少：{rule} {path} —— baseline 写 {was}，实际 {now}。"
                   f"请把 scripts/doc_lint_baseline.txt 改成 {now}。")
     if fixed:
         print()
         for rule, path, was in fixed:
-            print(f"ℹ️  债务已清：{rule} {path}（原 {was} 处）—— 从 baseline 里删掉这一行。")
+            print(f"ℹ️  豁免已不需要：{rule} {path}（原 {was} 处）—— 从 baseline 里删掉这一行。")
 
     print()
     if remaining:

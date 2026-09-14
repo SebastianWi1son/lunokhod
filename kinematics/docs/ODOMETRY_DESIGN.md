@@ -278,6 +278,6 @@ private:
 
 **市场参考（已 clone `reference/robot_localization`，36M，已 gitignore 不入库）**：
 - ROS 生态最主流轮式里程计+IMU 融合包（EKF/UKF，15 维状态含 gyro bias，two_d_mode 2D 平面）
-- 核心可读：`src/ekf.cpp`、`src/filter_base.cpp`（滤波核心与 ROS 封装分离）
+- 核心可读：`reference/robot_localization/src/ekf.cpp`、`reference/robot_localization/src/filter_base.cpp`（滤波核心与 ROS 封装分离）
 - 借鉴点：状态定义（x/y/yaw + 速度 + 偏差）、传感器 covariance 调权（打滑=odom 不确定性↑）、只更新可测状态分量（odom 不测 yaw 速度就不融合它）
 - 注意：ROS 生态，嵌入式侧只借算法思想，不引入依赖

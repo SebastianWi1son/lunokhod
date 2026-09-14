@@ -79,7 +79,7 @@ git push origin main                          # 首次 push 用 -u 记住上游
 git checkout -b release/v0.1 main
 
 # ③ 版本号：CMakeLists.txt 写 project(lunokhod_wheel VERSION 0.1.0)
-#    写 CHANGELOG.md（第一条：v0.1.0 有什么）
+#    写 ⬜ CHANGELOG.md（第一条：v0.1.0 有什么）
 
 # ④ 提交发布准备
 git add -A

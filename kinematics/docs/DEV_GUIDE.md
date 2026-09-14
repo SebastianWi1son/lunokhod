@@ -31,7 +31,7 @@ ENDFOR
 
 ---
 
-## STAGE 1：types + differential_drive（第一道门）
+## STAGE 1：types + drive_diff（第一道门）
 
 ```
 // 目标：最小可用 + CRTP 模式跑通
@@ -39,18 +39,18 @@ ENDFOR
 
 1. 建目录：
    kinematics/
-   ├── include/kinematics/
+   ├── inc/
    │   ├── contracts.hpp
-   │   ├── differential_drive.hpp
+   │   ├── drive_diff.hpp
    │   └── kinematics.hpp          // 唯一入口，先只 include 上面两个
-   ├── tests/test_kinematics.cpp
-   └── examples/differential_drive_example.cpp
+   ├── test/test_kinematics.cpp
+   └── examples/example.cpp
 
 2. contracts.hpp（不需要模板，现在就能写）：
    STRUCT Twist { float vx; float vy; float wz; }        // 输入
    STRUCT WheelSpeeds { float values[6]; uint8_t count; } // 输出，定长数组
 
-3. differential_drive.hpp（CRTP 模式，套用 Dog/Cat）：
+3. drive_diff.hpp（CRTP 模式，套用 Dog/Cat）：
    TEMPLATE<typename Derived> CLASS Chassis:
        METHOD inverse(cmd):                            // 统一接口
            RETURN static_cast<const Derived*>(this)->inverse_impl(cmd)
@@ -70,7 +70,7 @@ ENDFOR
            t.vy = 0                                          // 非完整约束
            RETURN t
 
-4. tests/test_kinematics.cpp（手写 CHECK 宏，不引框架）：
+4. test/test_kinematics.cpp（手写 CHECK 宏，不引框架）：
    CHECK 直行:   inverse({0.5, 0, 0})   → 两轮相等 = 16.667   (w=0.16, r=0.03)
    CHECK 旋转:   inverse({0, 0, 1})     → 左负右正 = ±2.667
    CHECK 互逆:   forward(inverse({0.5,0,1})) ≈ {0.5, 0, 1}   (误差 < 1e-5)
@@ -79,9 +79,9 @@ ENDFOR
 5. kinematics.hpp：
    #pragma once
    #include "contracts.hpp"
-   #include "differential_drive.hpp"
+   #include "drive_diff.hpp"
 
-6. examples/differential_drive_example.cpp：
+6. examples/example.cpp：
    DifferentialDrive chassis(0.16f, 0.03f)
    打印 inverse({0.5, 0, 1}) 三行结果，与手算对照
 
@@ -96,7 +96,7 @@ ENDFOR
 // 目标：三种底盘收敛到"同一翻译官 + 三本字典"
 // 时机：写第二个底盘时发现"公式又是手写展开" → 停下，先提取翻译官
 
-1. 提取翻译官（放独立头文件或 differential_drive.hpp 内）：
+1. 提取翻译官（放独立头文件或 drive_diff.hpp 内）：
    TEMPLATE<size_t N> METHOD jacobian_apply(const float (&J)[N][3], const Twist& cmd):
        FOR i IN 0..N-1:
            out.values[i] = J[i][0]*cmd.vx + J[i][1]*cmd.vy + J[i][2]*cmd.wz
@@ -104,7 +104,7 @@ ENDFOR
        RETURN out
    // 这就是"矩阵 × 向量"，所有线性底盘共用，一份代码
 
-2. mecanum_drive.hpp：
+2. drive_mecanum.hpp：
    CLASS MecanumDrive : Chassis<MecanumDrive>:
        CTOR(lx, ly, r): 存成员
        METHOD inverse_impl(cmd):
@@ -115,7 +115,7 @@ ENDFOR
            vy = r * (-FL+FR+RL-RR) / 4
            wz = r * (-FL+FR-RL+RR) / (4*(lx+ly))
 
-3. omni_drive.hpp：
+3. drive_omni.hpp：
    CLASS OmniDrive : Chassis<OmniDrive>:
        CTOR(R, n, gamma, r): 存成员
        METHOD inverse_impl(cmd):
@@ -139,11 +139,11 @@ ENDFOR
 
 ---
 
-## STAGE 3：SpeedLimiter（可选附赠组件 · Twist 空间斜坡发生器）
+## STAGE 3：TwistAccLimiter（**已迁出本库** → `control/twist_acc_limiter/`）
 
 ### 3.1 定位（2026-08 修正）
 
-**小礼包**：可选组件，独立文件 `inc/speed_limiter.hpp`，**不进 chassis.hpp 聚合入口**。
+**小礼包**：可选组件，**已迁出为独立模块** `control/twist_acc_limiter/`（STATIC 库，`.hpp`+`.cpp`），**不进 chassis.hpp 聚合入口**。
 
 - 为什么是"小礼包"不是核心：限幅是**应用层策略**，不是运动学数学——行业惯例放上层（ROS 导航栈 acc_lim、驱动器固件 ramping），没有一家运动学库内置它
 - 升维机会：THEORY 3.1 分层图里 "Velocity Limiter" 那一格。将来做完整控制系统库（限幅→逆解→里程计→轮PID）时，它升为正式组件；没机会就自己用
@@ -166,9 +166,9 @@ ENDFOR
 ### 3.3 伪代码（完整）
 
 ```cpp
-// inc/speed_limiter.hpp —— 可选附赠：Twist 空间加速度限幅器（斜坡发生器）
+// control/twist_acc_limiter/inc/twist_acc_limiter.hpp —— Twist 空间加速度限幅器（斜坡发生器）
 // 定位：上游指令（导航/PID/遥控，可任意跳变）→ 平滑斜坡输出 → kinematics inverse
-// 使用：需要时单独 #include "speed_limiter.hpp"（chassis.hpp 不含它）
+// 使用：需要时单独 #include "twist_acc_limiter.hpp"（chassis.hpp 不含它）
 
 #include "contracts.hpp"          // Twist
 
@@ -224,7 +224,7 @@ private:
 | T5 | 三通道独立 + 上报 | vx 大幅跳变 | vx 序列按斜坡，且 **vx_lim==true、vy_lim==false、wz_lim==false** | 通道隔离 + 饱和标志正确 |
 | T6 | 保持 | target 连续不变 | 输出不变 | 稳态无漂移 |
 
-测试方式：`test/test_speed_limiter.cpp`，同样 ALL PASS + 退出码 0 + -Werror。
+测试方式：`control/twist_acc_limiter/test/test_twist_acc_limiter.cpp`，同样 ALL PASS + 退出码 0 + -Werror。
 
 ### 3.5 与 legacy dsp_ramp_t 的对照（你已经写过的东西）
 
@@ -266,9 +266,9 @@ private:
    - 编译期:      static_assert 几个常数用例（constexpr 实例化验证）
 
 2. examples/：
-   - differential_drive_example.cpp
-   - mecanum_drive_example.cpp
-   - dual_sensor_fusion.cpp   ← sensor_fusion 模板（互补滤波 + 双点几何航向）
+   - example.cpp
+   - simulation_demo.cpp   ← 全链仿真（逆解 → 轮子 → 正解 → 里程计）
+   - （SensorFusion 模板**至今未实现**；原 `sensor_fusion/` 已移入 `trash/sensor_fusion/`）
 
 3. README.md：
    - 用法 3 行示例（include → 构造 → inverse）
@@ -289,11 +289,11 @@ private:
 
 ```
 1. 交叉编译冒烟:
-   arm-none-eabi-g++ -std=c++17 -mcpu=cortex-m4 -mfloat-abi=hard -fsyntax-only include/kinematics/kinematics.hpp
+   arm-none-eabi-g++ -std=c++17 -mcpu=cortex-m4 -mfloat-abi=hard -fsyntax-only inc/kinematics.hpp
    // 确认 MCU 工具链可编、零动态分配、零异常依赖
 
 2. PlatformIO 注册:
-   写 library.json（name/version/frameworks=arduino?/platforms=*）
+       写 ⬜ library.json（name/version/frameworks=arduino?/platforms=*）
    本地 pio pkg install 验证
 
 3. 发布前检查清单:
@@ -332,7 +332,7 @@ private:
 ## 验证渠道速查（四层）
 
 ```
-L1 单元测试（必须）:  tests/test_kinematics.cpp，数值断言 + 互逆 + fuzz
+L1 单元测试（必须）:  test/test_kinematics.cpp，数值断言 + 互逆 + fuzz
 L2 编译期（必须）:    -Wall -Wextra -Werror + sanitizer + static_assert
 L3 2D 仿真（推荐）:   30 行位姿积分器画轨迹（pybullet/Webots 对纯运动学过重）
 L4 交叉编译（发布前）: arm-none-eabi-g++ -fsyntax-only
