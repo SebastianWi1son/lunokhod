@@ -1,6 +1,6 @@
 # Kinematics 实现真相文档（以代码为准）
 
-> 生成日期：2026-08-22
+> 生成日期：2026-08-22 ｜ 最后同步：2026-09-13（P1~P4 修复记录 + odometry 规划）
 > 本文档描述 `kinematics/` 目录下**实际存在的代码**，一切以源码为准。
 > 根目录 `docs/` 下的 DESIGN.md / DEV_GUIDE_PSEUDOCODE.md / STAGE1_REVIEW.md / STAGE2_REVIEW.md 是设计过程文档，与现状的差异见 §7，问题见 §8。
 > 维护规则：**改代码必须同步改本文档**；本文档与代码冲突时，以代码为准并当场修正文档。
@@ -27,7 +27,7 @@ kinematics/
 ├── test/test_kinematics.cpp    ← 测试（手写 CHECK 宏，退出码即结果）
 ├── examples/
 │   ├── example.cpp             ← 三底盘 API 调用演示（CMake target: example_diff）
-│   └── simulation_demo.cpp     ← 2D 位姿积分仿真（⚠ 未挂 CMake target，见 §8-P3）
+│   └── simulation_demo.cpp     ← 2D 位姿积分仿真（CMake target: simulation_demo）
 ├── legacy/                     ← 2024 年 C 语言 nav 参考实现（不属于本库）
 ├── CMakeLists.txt
 └── AGENT.md                    ← 代理协作规则（学习项目，AI 禁改代码）
@@ -60,14 +60,14 @@ template<uint8_t N>
 WheelSpeeds jacobian_apply(const float (&J)[N][3], uint8_t wn, const Twist& t_cmd) {
     WheelSpeeds out_ws;
     out_ws.count_ = wn;
-    for (uint8_t i = 0; i < N; ++i) {          // ⚠ 循环上界是 N 不是 wn，见 §8-P1
+    for (uint8_t i = 0; i < wn; ++i) {         // 循环到 wn（运行时轮数），N 只是数组容量
         out_ws.values_[i] = J[i][0]*t_cmd.vx_ + J[i][1]*t_cmd.vy_ + J[i][2]*t_cmd.wz_;
     }
     return out_ws;
 }
 ```
 
-模板参数 `N` 由数组声明尺寸推导；`wn` 是运行时有效行数。两者只在 OmniDrive（声明 `J[6][3]`、实际 3 行）处不相等——**当前循环遍历到 N 会读写未初始化的 J[3..5] 行**（结果无害但属未定义行为，详见 §8-P1）。
+模板参数 `N` 由数组声明尺寸推导（**数组容量上界**）；`wn` 是运行时有效行数。两者只在 OmniDrive（声明 `J[6][3]`、实际 `wn_` 行）处不相等——循环上界必须用 `wn`，否则读写未初始化的 `J[3..5]` 行。（2026-09-13 已修复，见 §8-P1）
 
 ## 5. 三种底盘（以代码为准的数学）
 
@@ -114,20 +114,20 @@ wz =  r(−FL+FR−RL+RR)/(4(lx+ly))
 ```
 
 DESIGN.md 写的是 `+sin(θᵢ)·Vx − cos(θᵢ)·Vy − R·wz`（三处符号全部相反）。两者互为镜像约定，测试锚点（直行 → `{0, −14.434, +14.434}` 等）已按代码约定验证互逆自洽。**接线/对轮时以本文档的代码约定为准。**
-- 正运动学：**硬编码 3 轮、γ=0 特例**（伪逆手工展开，√3 取 1.7320508f）：
+- 正运动学：**通用 N 轮伪逆**（2026-09-13 由 3 轮 γ=0 特例升级；对任意 `wn_`、任意 `gamma_` 成立）：
 
 ```
-vx = (u2 − u1)/√3        ui = r·ωi
-vy = (2u0 − u1 − u2)/3
-wz = (u0 + u1 + u2)/(3R)
+vx = (2/N)·Σ(−sin θᵢ)·uᵢ       θᵢ = i·2π/N + γ,  uᵢ = r·ωᵢ,  N = wn_
+vy = (2/N)·Σ( cos θᵢ)·uᵢ
+wz = Σuᵢ / (N·R)
 ```
 
-`wn > 3` 或 `γ ≠ 0` 时 inverse 可用（N≤6），**forward 结果错误**（见 §8-P2）。
+`wn_=3, gamma_=0` 时可化简回旧特例公式（`vx=(u2−u1)/√3`、`vy=(2u0−u1−u2)/3`、`wz=(u0+u1+u2)/(3R)`），向后兼容。互逆性已由锚点覆盖：n=3 γ=0、n=4、n=3 γ=30°。
 
 ## 6. 构建与测试（实测）
 
 - CMake ≥ 3.28，C++17。`add_library(kinematics INTERFACE)`（header-only），`target_include_directories` 暴露 `inc/`。
-- 三个 target：`test_kinematics`（链接库，`-Wall -Wextra -Werror`）、`example_diff`（= examples/example.cpp，**无** -Werror 选项）；`simulation_demo.cpp` 无 target。
+- 三个 target，**全部**启用 `-Wall -Wextra -Werror`：`test_kinematics`（链接库）、`example_diff`（= examples/example.cpp）、`simulation_demo`（= examples/simulation_demo.cpp，L3 2D 位姿积分 demo）。
 - 测试方法论：锚点（手算有理数如 `50.0f/3.0f`）+ 互逆（forward∘inverse ≈ 恒等）+ 边界（零输入）；容差 1e-5，退出码即结果。
 - 手动编译命令（AGENT.md 记载）：`g++ -std=c++17 -Wall -Wextra -Iinc test/test_kinematics.cpp`
 - **2026-08-22 实测**：`g++ -std=c++17 -Wall -Wextra -Werror -Iinc test/test_kinematics.cpp` → `ALL PASS`，退出码 0。
@@ -141,15 +141,16 @@ wz = (u0 + u1 + u2)/(3R)
 | 3 | 基类名 `Chassis<Derived>`，`chassis.hpp` 是基座 | 实际基类叫 `Kinematics<Derived>`（STAGE2 复盘已修正命名，DESIGN.md 未回改）；`chassis.hpp` 是聚合入口 |
 | 4 | STAGE 3 在 kinematics 内做 header-only `speed_limiter.hpp` | 实际落地为 `control/twist_acc_limiter/`（.hpp+.cpp 的 STATIC 库），且不进 chassis.hpp |
 | 5 | Omni 逆运动学公式 sin/−cos/−R | 代码为 −sin/+cos/+R（§5.3） |
-| 6 | Omni forward 计划"3 轮特例先行，N>3 用一般公式" | 目前只有 3 轮 γ=0 特例，无一般公式 |
+| 6 | Omni forward 计划"3 轮特例先行，N>3 用一般公式" | 已实现通用 N 轮伪逆（含 γ）；3 轮 γ=0 是其中 N=3 的化简 |
 | 7 | 统一接口 `inverse<Chassis>(cmd)` 自由函数 | 实际为成员调用 `chassis.inverse_kinematics(cmd)`（DEV_GUIDE 备忘 4 已承认此修正） |
 | 8 | 开发计划 STAGE 3"待开发" | 其功能已由 twist_acc_limiter 模块完成 |
 
-## 8. 问题清单（只记录，不修改）
+## 8. 问题清单
 
-- **P1（正确性隐患）** `inc/kinematics.hpp` `jacobian_apply`：循环上界用编译期 `N` 而非运行时 `wn`。OmniDrive 传 `J[6][3]` + `wn=3` 时，`J[3..5]` 未初始化即被读取（UB；因 `count_=3` 调用方不读后三行，测试碰巧全绿）。建议作者自行改为 `i < wn` 并全零初始化 `J`。
-- **P2（功能缺口）** `drive_omni.hpp` `forward_impl` 硬编码 3 轮 γ=0；`wn_`、`gamma_` 成员在 forward 中未使用。构造 `wn>3` 时 forward 输出错误且无断言拦截。
-- **P3（构建缺口）** `examples/simulation_demo.cpp` 没有对应 CMake target，不会被构建，是否存在编译错误未知。
-- **P4（不一致）** `example_diff` target 未加 `-Wall -Wextra -Werror`，与 `test_kinematics` 不一致。
+- **P1（正确性隐患）✅ 已修复 2026-09-13**：`inc/kinematics.hpp` `jacobian_apply` 循环上界用编译期 `N` 而非运行时 `wn`；OmniDrive 传 `J[6][3]` + `wn=3` 时读取未初始化的 `J[3..5]`（UB，测试碰巧全绿）。→ 已改为 `i < wn`，并补 n=4 / γ≠0 互逆锚点。
+- **P2（功能缺口）✅ 已修复 2026-09-13**：`drive_omni.hpp` `forward_impl` 硬编码 3 轮 γ=0，`wn_`/`gamma_` 未使用，`wn>3` 输出错误且无断言。→ 已改为通用 N 轮伪逆（含 γ）。
+- **P3（构建缺口）✅ 已修复 2026-09-13**：`examples/simulation_demo.cpp` 没有 CMake target。→ 已挂 `simulation_demo` target（`-Werror`，编译通过、运行退出码 0）。
+- **P4（不一致）✅ 已修复 2026-09-13**：`example_diff` target 未加 `-Wall -Wextra -Werror`。→ 已补齐。
+- **（新增）P7（未开工）** OmniDrive 构造无参数校验：`J[6][3]` 定长，`wn>6` 越界写、`wn<2` 数学无意义——待加断言/校验（对应根 `docs/PENDING_ITEMS.md` P12）。
 - **P5（风格）** `contracts.hpp` 的 POD 契约成员用尾下划线命名（`vx_`），与"公共契约"语义存在张力；STAGE1_REVIEW 的 struct-POD 讨论未涉及此点。
 - **P6（文档债）** 根 `docs/DESIGN.md` 与 `docs/DEV_GUIDE_PSEUDOCODE.md` 未随 STAGE2 命名修正与 STAGE3 移址回改（§7 全部条目）。

@@ -3,9 +3,10 @@
 ## 项目定位
 
 C++17 header-only 零依赖嵌入式底盘运动学库（差速/Mecanum/全向 + SpeedLimiter）。
-- 源码在 `inc/`（用户唯一入口 `kinematics.hpp`）
-- 架构/公式：`docs/DESIGN.md`（权威）；开发流程：`docs/DEV_GUIDE_PSEUDOCODE.md`
-- **阶段复盘（含错误清单+正确示例+讨论收获）：`docs/STAGE1_REVIEW.md`、`docs/STAGE2_REVIEW.md`**——新阶段开工/复查代码前必读
+- 源码在 `inc/`（**瞬时映射唯一入口 `chassis.hpp`**；里程计 `odometry.hpp` 为 opt-in 兄弟头文件，**不进聚合入口**，见 `docs/ODOMETRY_DESIGN.md`）
+- 架构/公式：`../docs/DESIGN.md`（权威）；开发流程：`../docs/DEV_GUIDE_PSEUDOCODE.md`
+- **阶段复盘（含错误清单+正确示例+讨论收获）：`../docs/STAGE1_REVIEW.md`、`../docs/STAGE2_REVIEW.md`**——新阶段开工/复查代码前必读
+- 实现真相（以代码为准）：`docs/IMPLEMENTATION_TRUTH.md`（改代码必须同步该文档）
 - 参考实现：`legacy/`（2024 年 C 语言 nav 模块）
 
 ## 重要：这是学习项目
@@ -21,8 +22,9 @@ inc/contracts.hpp          数据层：Twist（输入契约）、WheelSpeeds（�
 inc/kinematics.hpp     数学核心：Kinematics<Derived>（CRTP 能力接口）+ jacobian_apply 翻译官 + k2PI
 inc/drive_diff.hpp     DiffDrive : public Kinematics<DiffDrive>
 inc/drive_mecanum.hpp  MecanumDrive（4×3 J，forward 伪逆）
-inc/drive_omni.hpp     OmniDrive（N×3 J，forward 3 轮特例 γ=0）
-inc/chassis.hpp        对外聚合入口（用户只 include 这一个）
+inc/drive_omni.hpp     OmniDrive（N×3 J，forward 通用 N 轮伪逆，任意 wn/gamma）
+inc/chassis.hpp        对外聚合入口（瞬时映射唯一入口，用户只 include 这一个）
+inc/odometry.hpp       里程计（规划/实现中）：有状态积分器 + 记录源，opt-in 不进 chassis.hpp
 test/test_kinematics.cpp   测试驱动（断言 + 退出码，三底盘全绿）
 examples/                  使用演示（独立 main）
 ```
