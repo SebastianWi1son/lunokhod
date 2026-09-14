@@ -54,13 +54,20 @@ jobs:
       - name: 写一个最小消费者工程
         run: |
           mkdir -p /tmp/consumer
-          cat > /tmp/consumer/CMakeLists.txt <<EOF
+          # 注意：heredoc 用【引号形式】<<'EOF' —— 不做 shell 展开。
+          #           曾经写成 \${GITHUB_WORKSPACE}，结果 bash 把反斜杠转义成字面量，
+          #           CMake 把 ${...} 当未定义变量展开成空 → 路径变成 "/control/..."。
+          #           现在路径改由 -DLUNOKHOD_ROOT=... 传入。
+          cat > /tmp/consumer/CMakeLists.txt <<'EOF'
           cmake_minimum_required(VERSION 3.28)
           project(consumer CXX)
           set(CMAKE_CXX_STANDARD 17)
-          add_subdirectory(\${GITHUB_WORKSPACE}/kinematics ext/kinematics)
-          add_subdirectory(\${GITHUB_WORKSPACE}/control/wheel ext/wheel)
-          add_subdirectory(\${GITHUB_WORKSPACE}/control/twist_acc_limiter ext/tal)
+          if(NOT LUNOKHOD_ROOT)
+            message(FATAL_ERROR "请传 -DLUNOKHOD_ROOT=<lunokhod 根目录>")
+          endif()
+          add_subdirectory(${LUNOKHOD_ROOT}/kinematics ext/kinematics)
+          add_subdirectory(${LUNOKHOD_ROOT}/control/wheel ext/wheel)
+          add_subdirectory(${LUNOKHOD_ROOT}/control/twist_acc_limiter ext/tal)
           add_executable(app main.cpp)
           target_compile_options(app PRIVATE -Wall -Wextra -Werror)
           target_link_libraries(app PRIVATE kinematics wheel twist_acc_limiter)
@@ -79,7 +86,7 @@ jobs:
           EOF
       - name: 配置 + 编译
         run: |
-          cmake -S /tmp/consumer -B /tmp/consumer/build
+          cmake -S /tmp/consumer -B /tmp/consumer/build -DLUNOKHOD_ROOT="$GITHUB_WORKSPACE"
           cmake --build /tmp/consumer/build -j"$(nproc)"
       - name: 断言库模式干净（没有 test_* / example_* 可执行文件）
         run: |
@@ -102,7 +109,10 @@ jobs:
         with:
           python-version: '3.12'
       - name: 装 oracle 依赖（金标靠第三方库交叉验证）
-        run: pip install numpy scipy sympy
+        # ⚠ 锁版本：金标是【逐字节比对】的，不同 numpy/scipy 底下的 libm
+        #   可能给出末位差异 → 会变成随机红的 flaky job。
+        #   此处锁定的是作者本地已验证过的版本；升级需同时重生金标并改这里。
+        run: pip install numpy==1.26.4 scipy==1.11.4 sympy==1.12
       - name: 重新生成金标（生成器内部有五重自检，失败会直接退出）
         run: python3 kinematics/test/tools/gen_odometry_golden.py
       - name: 与仓库里的文件比对 —— 有 diff 说明金标被手改过或生成器飘了
