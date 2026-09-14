@@ -1,0 +1,109 @@
+name: CI
+
+# 四件事：
+#   ① 开发者视角：一键构建 + 全量测试
+#   ② 守护「每个库都能独立构建」这个性质
+#   ③ 守护「被消费时进入库模式、不泄漏测试可执行文件」这个性质
+#   ④ 金标可复现（重跑生成器 → 必须无 diff）
+
+on:
+  push:
+    branches: [master, main, 'dev/**', 'feature/**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # ── ① 一键构建 + 全量测试（对应 README 用法 ①）────────────────────────
+  aggregate:
+    name: 聚合构建 + 全量测试
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: 工具链版本
+        run: |
+          cmake --version | head -1
+          g++ --version | head -1
+      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+      - name: 编译（-Wall -Wextra -Werror，告警即失败）
+        run: cmake --build build -j"$(nproc)"
+      - run: ctest --test-dir build --output-on-failure
+
+  # ── ② 每个库单独构建（对应 README 用法 ②）────────────────────────────
+  standalone:
+    name: 独立构建 / ${{ matrix.component }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        component:
+          - kinematics
+          - control/wheel
+          - control/twist_acc_limiter
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S "${{ matrix.component }}" -B build -DCMAKE_BUILD_TYPE=Debug
+      - run: cmake --build build -j"$(nproc)"
+      - run: ctest --test-dir build --output-on-failure
+
+  # ── ③ 库模式：被消费时只出库，不生成测试/示例（对应 README 用法 ③）──────
+  consumer-mode:
+    name: 库模式（被消费时不泄漏测试可执行文件）
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: 写一个最小消费者工程
+        run: |
+          mkdir -p /tmp/consumer
+          cat > /tmp/consumer/CMakeLists.txt <<EOF
+          cmake_minimum_required(VERSION 3.28)
+          project(consumer CXX)
+          set(CMAKE_CXX_STANDARD 17)
+          add_subdirectory(\${GITHUB_WORKSPACE}/kinematics ext/kinematics)
+          add_subdirectory(\${GITHUB_WORKSPACE}/control/wheel ext/wheel)
+          add_subdirectory(\${GITHUB_WORKSPACE}/control/twist_acc_limiter ext/tal)
+          add_executable(app main.cpp)
+          target_compile_options(app PRIVATE -Wall -Wextra -Werror)
+          target_link_libraries(app PRIVATE kinematics wheel twist_acc_limiter)
+          EOF
+          cat > /tmp/consumer/main.cpp <<'EOF'
+          #include "chassis.hpp"
+          #include "twist_acc_limiter.hpp"
+          #include "wheel.hpp"
+          int main() {
+              MecanumDrive    chassis(0.10f, 0.12f, 0.03f);
+              TwistAccLimiter limiter(1.5f, 1.5f, 4.0f);
+              (void)chassis.inverse_kinematics(Twist{0.5f, 0.0f, 0.0f});
+              (void)limiter.limit(Twist{0.5f, 0.0f, 0.0f}, 0.001f);
+              return 0;
+          }
+          EOF
+      - name: 配置 + 编译
+        run: |
+          cmake -S /tmp/consumer -B /tmp/consumer/build
+          cmake --build /tmp/consumer/build -j"$(nproc)"
+      - name: 断言库模式干净（没有 test_* / example_* 可执行文件）
+        run: |
+          leaked=$(find /tmp/consumer/build -type f -executable \
+                     \( -name 'test_*' -o -name 'example_*' -o -name 'odometry_demo' \) || true)
+          if [ -n "$leaked" ]; then
+            echo "❌ 库模式泄漏了开发期可执行文件："
+            echo "$leaked"
+            exit 1
+          fi
+          echo "✅ 库模式干净：只出了库，没出测试/示例/工具"
+
+  # ── ④ 金标可复现 ──────────────────────────────────────────────────
+  golden-reproducible:
+    name: 金标可复现（重跑生成器 → 必须无 diff）
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 装 oracle 依赖（金标靠第三方库交叉验证）
+        run: pip install numpy scipy sympy
+      - name: 重新生成金标（生成器内部有五重自检，失败会直接退出）
+        run: python3 kinematics/test/tools/gen_odometry_golden.py
+      - name: 与仓库里的文件比对 —— 有 diff 说明金标被手改过或生成器飘了
+        run: git diff --exit-code kinematics/test/odometry_golden.hpp

@@ -1,0 +1,77 @@
+# lunokhod
+
+嵌入式底盘控制系统 —— **手写重构项目**：把 2024 年的 C 语言巡线代码，逐个重构成可复用、可测试的 C++17 组件。
+
+- 每个组件：**零依赖**、能直接拖进 STM32 工程、带行为锚点测试
+- 源码由作者手写；测试由 AI 编写（出题人 / 答题人分工，见 [AGENTS.md](AGENTS.md)）
+
+## 这是什么
+
+lunokhod 是**底盘控制系统的库集合** —— 几个互相独立、可单独取用的 C++17 库，
+外加一个开发期聚合器。
+
+- 每个库：**零依赖**（只用标准库头文件）、能单独拖进 STM32 工程
+- 每个库：**可单独构建、单独测试、单独被消费**（被别的工程引入时自动进入“库模式”）
+- 源码由作者手写；测试由 AI 编写（见 [AGENTS.md](AGENTS.md)）
+
+## 库清单
+
+| 库 | 路径 | CMake target | 依赖 | 用途 |
+|---|---|---|---|---|
+| **kinematics** | [`kinematics/`](kinematics/) | `kinematics` | — | 平面底盘运动学（差速 / Mecanum / 全向）+ 里程计 |
+| **wheel** | [`control/wheel/`](control/wheel/) | `wheel` | — | 单轮执行层：S 曲线规划 → 速度环 PID → PWM |
+| **twist_acc_limiter** | [`control/twist_acc_limiter/`](control/twist_acc_limiter/) | `twist_acc_limiter` | `kinematics` | Twist 空间三通道加速度限幅（斜坡发生器） |
+
+**依赖方向只能单向**：`kinematics ← twist_acc_limiter`。新增依赖前先看 [`docs/TODO.md`](docs/TODO.md) 的固件主线。
+
+全局架构（下行命令链 + 上行感知链 + 汇合点）见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
+
+## 三种用法
+
+**① 开发者：一键构建 + 全部测试**
+
+```bash
+cmake -S . -B build && cmake --build build -j
+ctest --test-dir build --output-on-failure          # 8 个测试
+```
+
+**② 开发者：只搞一个库**
+
+```bash
+cmake -S kinematics -B build/kinematics && cmake --build build/kinematics -j
+ctest --test-dir build/kinematics --output-on-failure
+```
+
+**③ 消费方（固件工程 / 别的项目）：只取需要的库**
+
+```cmake
+add_subdirectory(<lunokhod>/kinematics ${CMAKE_BINARY_DIR}/_ext/kinematics)
+target_link_libraries(fw PRIVATE kinematics)
+```
+
+被引入的组件会**自动进入“库模式”**：只出库，不生成测试 / 示例 / 工具
+（交叉编译固件时这一点是必须的）。可运行的完整范例见 `~/Develop/Workspace/fw_poc/`。
+
+> ⚠️ **不要** `add_subdirectory(lunokhod)` —— 根目录是开发期聚合器，
+> 引它会连带生成全部组件的测试可执行文件。想要“一键构建”用 ①。
+
+所有 target 都开在 `-Wall -Wextra -Werror`（告警即错误）。
+
+## 文档
+
+**先读 [`docs/README.md`](docs/README.md)** —— 它说明有哪些文档、各自属于哪一类、怎么写才不烂。
+
+| 我想知道 | 看哪 |
+|---|---|
+| 全局架构（两条链 + 汇合点） | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| 现在能做什么、还剩什么 | [`docs/TODO.md`](docs/TODO.md) |
+| 某个组件怎么设计的 | `<组件>/docs/DESIGN.md` |
+| 代码实际长什么样 | `<组件>/docs/IMPL.md` |
+| git 工作流 | [`docs/GIT.md`](docs/GIT.md) |
+| AI 怎么和我协作 | [`AGENTS.md`](AGENTS.md)（全局）+ [`kinematics/AGENTS.md`](kinematics/AGENTS.md)（组件级） |
+
+文档规则一句话：**一条事实只写一处；日志只增不改；状态不手写。**
+
+## 许可
+
+[MIT](LICENSE)

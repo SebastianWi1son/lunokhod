@@ -8,3 +8,8 @@ cmake-build-debug/
 
 # 参考库（只读，来源可拉取，不进版本库）
 reference/
+
+# 本地仿真产物（tools/odometry_demo.cpp + tools/plot_odometry.py）
+run.csv
+run.png
+odometry_demo.png
