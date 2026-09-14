@@ -45,7 +45,10 @@ generated: true | false
 ```
 
 - `class` —— 决定这份文件适用哪条规则。
-- `generated: true` —— 表示"禁止手改"，改完会被下一次生成覆盖。
+- `generated: true` —— 表示“禁止手改”，改完会被下一次生成覆盖。
+- `accepted` —— **只有 `class: work` 需要**。`false` = 施工中（可以留在 `docs/`）；
+  `true` = 已验收（**必须移出 `docs/`**，`scripts/check_docs.py` 会拦）。
+  加这个字段的理由：没它，“验收后移出 docs/” 这条规矩**机器判不了**，只能靠记性。
 
 ---
 
@@ -63,7 +66,7 @@ generated: true | false
 | 代码**实际**长什么样 | **代码本身**（`IMPL.md` 只是地图） | ⚠️ 见 §7 |
 | 现在能跑什么、验收数字 | **⚠️ 缺** —— 应建 `STATUS.md` | ❌ 见 `trash/README.md` |
 | AI 协作规则（组件级） | [`../kinematics/AGENTS.md`](../kinematics/AGENTS.md) | ✅ |
-| AI 协作规则（**全局级**） | [`AGENTS.md`](AGENTS.md) | ✅ |
+| AI 协作规则（**全局级**） | [`AGENTS.md`](../AGENTS.md) | ✅ |
 | 踩过的坑 / 阶段复盘 | `<组件>/docs/log/*.md` | ✅ |
 | 外部评审查验 | [`log/REVIEW_RESPONSE.md`](log/REVIEW_RESPONSE.md) | ✅ |
 | 施工单（怎么改代码） | `<组件>/docs/*_WORK.md`、`DEV_GUIDE*.md`（**临时物**） | ⚠️ 用完即弃 |
@@ -193,11 +196,10 @@ lunokhod/
 其余                  → 别写
 ```
 
-| 规则 | 放哪 | 为什么 |
+| 规则 | 放哪 | 状态 |
 |---|---|---|
-| 文档里引用的路径 / 符号必须存在 | **CI 脚本** | 机器能判（本次整理就是靠人工跑这个才找出漂移的） |
-| 施工单验收后必须移出 `docs/` | **CI 脚本** | 检查 `class: work` 的文件是否还在 |
-| `STATUS.md` 必须是生成的 | **CI 脚本** | 重跑无 diff |
+| 文件头齐全 / 类与位置相符 / 禁止行号 / 链接与引用存在 / `fact` 非孤儿 / 施工单验收后移出 | **CI 脚本** | ✅ `scripts/check_docs.py` |
+| `STATUS.md` 必须是生成的（重跑无 diff） | **CI 脚本** | ⬜ 待建（要先生成脚本） |
 | 命名约定 / 成员尾下划线 / 禁止 camelCase | `AGENTS.md` | 每次都要守 |
 | **oracle 必须外借，不许自造；借不到要上报** | `AGENTS.md`（kinematics） | 每次写测试都要守 |
 | 不许改 legacy/（只读参考） | `AGENTS.md` | 常驻约束 |
@@ -205,6 +207,24 @@ lunokhod/
 | **批次验收**流程 | **skill** | 特定任务，步骤多 |
 | **文档对账**流程 | **skill** | 同上 |
 | **尺子审计**流程 | **skill** | 同上 |
+
+### 已实现的门禁：`scripts/check_docs.py`
+
+规则的具体实现清单用 `scripts/check_docs.py --why` 看 —— **不在这里重复一遍**：
+“同一句话说两遍就要打架”，这条规矩对自己也适用。
+
+```bash
+scripts/check_docs.py          # 检查；有违规 → 退出码 1
+scripts/check_docs.py --list   # 列出受管文件与它们的类
+scripts/check_docs.py --why    # 打印规则清单与各自依据
+```
+
+- **零依赖**（不用 PyYAML），CI 里不需要装包。
+- 存在性以 **`git ls-files`** 为准 —— 用 `rglob` 会把本地有、git 里没有的 `reference/`
+  也算进去，造成「本地过、CI 挂」的假绿。
+- 不受管：`trash/`（待裁决）· `reference/`（供应商）· `legacy/`（冻结参考）· `build/`。
+- **存量违规**记在 [`../scripts/doc_lint_baseline.txt`](../scripts/doc_lint_baseline.txt)
+  （债务清单）：只减不增；数字变小脚本会提醒你更新；新增违规立刻变红。
 
 ### 待建 skill（三个）
 

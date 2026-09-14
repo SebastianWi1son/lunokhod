@@ -1,0 +1,30 @@
+# 文档门禁 · 存量违规清单（债务清单）
+#
+# 格式： <规则>  <相对路径>  <允许条数>
+#   · 超出条数 → 门禁变红（新引入的违规一律拦下）
+#   · 少于条数 → 脚本提醒你把这行改小
+#   · 条目消失 → 脚本提醒你删掉这行
+#
+# 用法：修完一条就把数字改小。这份清单应当【只减不增】。
+#       它是明示的、可数的债务，不是规则豁免。
+#
+# 规则代号看 `scripts/check_docs.py --why`。
+
+# ── R5 真实漂移：设计文档里的架构树与实际文件不符 ─────────────────────
+# 登记于 2026-09-14。对应 trash/README.md 第 3 条、
+# control/twist_acc_limiter/docs/IMPL.md §6、kinematics/docs/IMPL.md §7。
+# 修法（trash/README.md 已记）：整块重写架构树，或标注「早期草案」。
+# 涉及旧名：differential_drive/mecanum_drive/omni_drive/speed_limiter
+#          → 实际为 drive_diff/drive_mecanum/drive_omni/twist_acc_limiter
+R5  kinematics/docs/DESIGN.md                 7
+R5  kinematics/docs/DEV_GUIDE.md             10
+
+# ── R5 已知误报：文档在【引用过时的设计】而非【声称文件存在】 ──────────
+# 判据：这行是在说「仓库里有这个文件」，还是在记录「旧设计曾经这么说过」？
+#       前者要修文档；后者是正确的历史记录，留在本清单。
+R5  control/twist_acc_limiter/docs/IMPL.md    1   # §6 漂移清单，引述旧设计
+R5  kinematics/docs/ODOMETRY_DESIGN.md        2   # 对照 foucault 的 src/ekf.cpp、src/filter_base.cpp
+
+# ── R5 计划中的文件（流程里提到，尚未创建）──────────────────────────
+R5  docs/GIT.md                               1   # 发布流程步骤「写 CHANGELOG.md」，还没建
+R5  docs/README.md                            1   # 目录树注释里提到工具约定名 CLAUDE.md，非本仓文件

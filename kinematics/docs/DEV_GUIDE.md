@@ -1,6 +1,7 @@
 ---
 class: work
 generated: false
+accepted: false
 ---
 > **类：D 施工单（临时物）** —— 阶段 1~3 已完成，阶段 4~5 未开工。**验收后进 trash/**；代码本身才是唯一源。
 > 文档体系与写作规则：../../docs/README.md

@@ -1,0 +1,392 @@
+#!/usr/bin/env python3
+"""
+check_docs.py — 把「文档规矩」变成机器门禁
+
+规则的唯一来源是 `docs/README.md`（§6 六条硬规则 + §7「机器能判的，不要写成文字」）。
+本脚本只负责把其中【机器判得了】的那几条跑一遍 —— 不判重要性，只判可判性。
+
+用法：
+    scripts/check_docs.py            # 检查；有违规 → 退出码 1
+    scripts/check_docs.py -v         # 同时打印每个受管文件的判定
+    scripts/check_docs.py --list     # 只列出受管文件与它们的类
+    scripts/check_docs.py --why      # 打印规则清单与各自的依据
+
+设计说明（为什么长这样）：
+  · 零依赖 —— 不用 PyYAML。CI 里不需要 pip install，跑得也快。
+  · 行号规则（R3）只作用于 fact/status/work，**log 类豁免** ——
+    A 类日志「只增不改」，里面的行号是【当时那一行的快照】，是正确记录，不是错误。
+    硬要它无行号，等于要求历史记录不许带时间戳。
+  · 存量违规走 `scripts/doc_lint_baseline.txt`（债务清单）而不是豁免规则 ——
+    数字是明示的、可数的、只减不增的；新增违规立刻变红。
+"""
+
+import argparse
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+# 不受管的目录：
+#   trash/     待裁决，即将整目录删除，给它补元数据没有意义
+#   reference/ 供应商代码（不入 git）
+#   legacy/    冻结的旧实现，只读参考（AGENTS.md：不许改）
+#   build/ 等  构建产物
+SKIP_DIRS = {"trash", "reference", "legacy", "build", "node_modules", ".git", ".venv"}
+
+CLASSES = {"log", "fact", "status", "work"}
+GENERATED = {"true", "false"}
+
+SRC_EXT = r"(?:cpp|hpp|hh|h|cc|c|py|md|txt|cmake|yml|yaml|json|sh)"
+# 行号引用： foo/bar.cpp:25   或   foo/bar.hpp:25-51
+LINE_REF = re.compile(
+    rf"[\w./-]+\.{SRC_EXT}\s*:\s*\d+(?:\s*-\s*\d+)?"
+)
+# markdown 本地链接
+MD_LINK = re.compile(r"\[[^\]]*\]\(\s*<?([^)>\s]+)>?(?:\s+\"[^\"]*\")?\s*\)")
+# 反引号里的内容
+BACKTICK = re.compile(r"`([^`\n]+)`")
+# 反引号里「像仓库内文件」的：带路径的（inc/odometry.hpp）
+PATHY = re.compile(rf"^[\w.-]+(?:/[\w.-]+)+\.{SRC_EXT}$")
+# 或者不带路径的裸文件名（speed_limiter.hpp）——
+# 只认【带已知扩展名】的，避开 "每个组件的 DESIGN.md" 这类泛指以外的噪声
+BARE = re.compile(rf"^[\w.-]+\.{SRC_EXT}$")
+FENCE = re.compile(r"^\s*(?:```|~~~)")
+# 代码块里不带反引号的文件名（目录树 / 架构图 / 构建命令）
+BARE_ANY = re.compile(rf"[\w./-]+\.{SRC_EXT}\b")
+
+
+# ───────────────────────── 基础工具 ─────────────────────────
+
+def tracked_files(root: Path):
+    """仓库里【应当存在】的文件（相对路径集合）。
+
+    为什么不用 rglob：`reference/` 这类目录在本地存在但不入库，
+    拿它做存在性判断会造成【本地过、CI 挂】的假绿。
+
+    为什么带 `--others --exclude-standard`：只看 `--cached` 的话，
+    刚建好还没 `git add` 的新文件会被判成“不存在”，写文档时很难用。
+    加上未跟踪但未被 ignore 的文件，既修了这个坑，又仍然把 `reference/` 挡在外面。
+    """
+    try:
+        # -z + core.quotePath=false：不然 git 会把中文/空格文件名转义成
+        # "docs/log/\345\244\215\347\233\230.md" 这种形式，导致全部误判“不存在”。
+        out = subprocess.run(
+            ["git", "-c", "core.quotePath=false", "-C", str(root),
+             "ls-files", "-z", "-co", "--exclude-standard"],
+            capture_output=True, text=True, check=True).stdout
+        return {p for p in out.split("\0") if p}
+    except Exception:  # 非 git 环境（打包分发等）→ 退回扫盘
+        return {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}
+
+
+def collect(root: Path):
+    """返回 (受管文件列表, 跳过的文件数)"""
+    managed, skipped = [], 0
+    for p in sorted(root.rglob("*.md")):
+        rel = p.relative_to(root)
+        if any(part in SKIP_DIRS for part in rel.parts):
+            skipped += 1
+            continue
+        managed.append(p)
+    return managed, skipped
+
+
+def parse_front_matter(text: str):
+    """极简 front-matter 解析（只要有 key: value，不引入 YAML 依赖）"""
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None, text
+    meta = {}
+    for i, ln in enumerate(lines[1:], start=1):
+        if ln.strip() == "---":
+            return meta, "\n".join(lines[i + 1:])
+        key, sep, val = ln.partition(":")
+        if sep:
+            # 去掉行内注释（YAML 允许 `false   # 说明`）。
+            # ⚠ foucault/docs/STATUS.md 就是这么写的，曾经被当成非法值。
+            val = re.sub(r"\s+#.*$", "", val)
+            meta[key.strip()] = val.strip().strip("\"'")
+    return None, text  # 有开头没结尾 → 视为没有
+
+
+def split_fences(text: str):
+    """返回 (代码块外的正文, 代码块内的内容)。
+
+    两个用途不同：
+      · 正文（outside）—— 行号规则只查它；引用旧名（改名记录 / 漂移清单）多半在正文里，
+        那些是【正确的历史记录】，查了就是误报。
+      · 代码块（fenced）—— 目录树 / 架构图多半在这里。它是在【声称仓库里有哪些文件】，
+        所以裸文件名也查。
+    """
+    outside, inside, buf, is_in = [], [], [], False
+    for ln in text.splitlines():
+        if FENCE.match(ln):
+            (inside if is_in else outside).extend(buf)
+            buf = []
+            is_in = not is_in
+            continue
+        buf.append(ln)
+    (inside if is_in else outside).extend(buf)
+    return "\n".join(outside), "\n".join(inside)
+
+
+def tokens(text: str, allow_bare: bool):
+    """取出反引号里「像仓库内文件」的 token。
+    allow_bare=False 时只认带路径的（inc/odometry.hpp）；
+    allow_bare=True  时也认裸文件名（drive_diff.hpp）。
+    """
+    for m in BACKTICK.finditer(text):
+        tok = m.group(1).strip()
+        if "*" in tok or " " in tok or tok.startswith(("http", "-", "~", "/")):
+            continue
+        if PATHY.match(tok) or (allow_bare and BARE.match(tok)):
+            yield tok
+
+
+def bare_names(fenced: str):
+    """代码块里【不带反引号】的文件名（目录树 / 架构图 / 构建命令）。
+
+    去掉 `//` 之后的内容 —— 那是注释里的引用（多半指外部库），不是对仓库布局的声称。
+    """
+    for ln in fenced.splitlines():
+        for m in BARE_ANY.finditer(ln.split("//", 1)[0]):
+            yield m.group(0)
+
+
+# ───────────────────────── 规则 ─────────────────────────
+
+def check(paths, root):
+    """跑全部规则。返回 (errors, warnings)，元素为 (规则代号, 相对路径, 说明)"""
+    errors, warnings = [], []
+    texts = {}
+    for p in paths:
+        texts[p] = p.read_text(encoding="utf-8", errors="replace")
+
+    # 以 git 跟踪的文件为「存在」的准绳
+    tracked = tracked_files(root)
+    basenames = {Path(t).name for t in tracked}
+
+    # 先收集每份文件的名字，供 R5（孤儿）用
+    names = {p: p.relative_to(root).as_posix() for p in paths}
+
+    for p in paths:
+        rel = names[p]
+        text = texts[p]
+        meta, body_raw = parse_front_matter(text)
+        body, fenced = split_fences(body_raw)
+        in_log = "log" in p.relative_to(root).parts
+        in_docs = "docs" in p.relative_to(root).parts
+
+        # ── R1 文件头 ──
+        # 注意：class 非法时【不 continue】—— 否则第一个错会把后面所有错遮住。
+        #       把 cls 置 None（= “类未知”），再按“未知类”把与类无关的规则跑完。
+        cls = None
+        if meta is None:
+            errors.append(("R1", rel, "缺少 front-matter（§3）"))
+        else:
+            cls = meta.get("class")
+            if cls not in CLASSES:
+                errors.append(("R1", rel,
+                               f"class 缺失或非法：{cls!r}（只准 {'/'.join(sorted(CLASSES))}）"))
+                cls = None
+            if meta.get("generated") not in GENERATED:
+                errors.append(("R1", rel,
+                               f"generated 缺失或非法：{meta.get('generated')!r}（只准 true/false）"))
+
+        # ── R2 类与位置相符（§5 目录地图）—— 需要 class 合法才判得了 ──
+        if cls is not None:
+            if cls == "log" and not in_log:
+                errors.append(("R2", rel, "class: log 必须住在 log/ 目录下"))
+            if cls in ("fact", "status") and in_log:
+                errors.append(("R2", rel, f"class: {cls} 不许住在 log/（log/ 只放只增不改的日志）"))
+            if cls == "work":
+                acc = meta.get("accepted")
+                if acc not in GENERATED:
+                    warnings.append(("R2", rel, "class: work 缺少 accepted: true/false（验收了吗？）"))
+                elif acc == "true" and in_docs:
+                    errors.append(("R2", rel, "施工单已 accepted: true，必须移出 docs/（§7）"))
+
+        # ── R3 禁止行号引用（§6④）—— 只有 log 豁免；类未知时照样查 ──
+        if cls != "log":
+            for m in LINE_REF.finditer(body):
+                errors.append(("R3", rel, f"出现行号引用 `{m.group(0)}`（§6④ 禁止行号）"))
+
+        # ── R4 本地链接必须存在（§7）──
+        for m in MD_LINK.finditer(body):
+            target = m.group(1).strip()
+            if target.startswith(("http://", "https://", "mailto:", "#", "data:")):
+                continue
+            target = target.split("#", 1)[0]
+            if not target:
+                continue
+            if not (p.parent / target).exists():
+                errors.append(("R4", rel, f"链接指向不存在的路径：`{target}`"))
+
+        # ── R5 引用的文件必须存在（§7）。log 类豁免（只增不改，里面的旧路径是当时的快照）──
+        # 查两个地方，因为「引用旧名」和「声称布局」长得一样但性质相反：
+        #   · 正文里【带路径】的（inc/speed_limiter.hpp）→ 在声称文件在哪 → 查
+        #   · 代码块里的文件名（目录树 / 架构图不带反引号）→ 在声称仓库布局 → 查
+        #   但正文里的裸文件名不查 —— 它多半出现在改名记录 / 漂移清单里，是正确的历史记录。
+        if cls != "log":
+            cands = set(tokens(body, allow_bare=False)) | set(bare_names(fenced))
+            for tok in sorted(cands):
+                if tok in tracked or Path(tok).name in basenames:
+                    continue
+                if (p.parent.relative_to(root) / tok).as_posix() in tracked:  # 相对这份文档的写法
+                    continue
+                errors.append(("R5", rel, f"引用了不存在的文件：`{tok}`"))
+
+    # ── R6 fact 文档不许是孤儿（§4 每条事实只有一个家）──
+    for p in paths:
+        meta, _ = parse_front_matter(texts[p])
+        if not meta or meta.get("class") != "fact":
+            continue
+        rel = names[p]
+        base = p.name
+        refs = 0
+        for q in paths:
+            if q == p:
+                continue
+            if rel in texts[q] or base in texts[q]:
+                refs += 1
+        if refs == 0:
+            errors.append(("R6", rel, "fact 类文档没有任何地方引用它 —— 等于没写（§4）"))
+
+        # ── 附加提示：status 还是手写的（§6③ 目标是脚本生成）──
+        if meta.get("class") == "status" and meta.get("generated") == "false":
+            warnings.append(("提示", rel, "class: status 但 generated: false —— 目标是由脚本生成（§6③）"))
+
+    return errors, warnings
+
+
+# ───────────────────────── 债务清单 ─────────────────────────
+
+BASELINE = ROOT / "scripts" / "doc_lint_baseline.txt"
+
+
+def load_baseline():
+    """已知违规（历史债务）。格式： <规则>  <相对路径>  <允许条数>"""
+    if not BASELINE.exists():
+        return {}
+    out = {}
+    for ln in BASELINE.read_text(encoding="utf-8").splitlines():
+        ln = ln.split("#", 1)[0].strip()
+        if not ln:
+            continue
+        parts = ln.split()
+        if len(parts) != 3:
+            continue
+        rule, path, n = parts
+        out[(rule, path)] = int(n)
+    return out
+
+
+def apply_baseline(errors):
+    """按 (规则, 路径) 分组，超出 baseline 的才算错，少于 baseline 的提示更新"""
+    base = load_baseline()
+    counts = {}
+    for rule, path, msg in errors:
+        counts.setdefault((rule, path), []).append(msg)
+
+    remaining, shrunk, fixed = [], [], []
+    for key, msgs in counts.items():
+        allowed = base.get(key, 0)
+        if len(msgs) > allowed:
+            for extra in msgs[allowed:]:
+                remaining.append((key[0], key[1], extra))
+        if len(msgs) < allowed:
+            shrunk.append((key[0], key[1], allowed, len(msgs)))
+    for key, allowed in base.items():
+        if key not in counts:
+            fixed.append((key[0], key[1], allowed))
+    return remaining, shrunk, fixed
+
+
+# ───────────────────────── 主流程 ─────────────────────────
+
+WHY = """\
+规则来源：docs/README.md（§6 六条硬规则 / §7「机器能判的，不要写成文字」）
+
+  R1  每份受管文档必须有 front-matter，class ∈ {log,fact,status,work}，
+      generated ∈ {true,false}                                      §3 文件头模板
+  R2  类必须和位置相符：log → 只能住 log/；fact/status → 不许住 log/；
+      work → accepted: true 之后必须移出 docs/                       §5 目录地图 / §7
+  R3  fact / status / work 正文禁止「文件:行号」；log 豁免            §6④
+  R4  markdown 本地链接的目标必须存在                                §7
+  R5  反引号里的仓库内路径必须存在                                   §7
+  R6  fact 类文档不许是孤儿（必须被别处引用）                        §4 事实归属表
+
+不受管：trash/（待裁决）· reference/（供应商）· legacy/（冻结参考）· build/
+
+存量违规记在 scripts/doc_lint_baseline.txt（债务清单）：只减不增。
+"""
+
+
+def main():
+    ap = argparse.ArgumentParser(description="文档门禁：把 docs/README.md 的规矩跑一遍")
+    ap.add_argument("-v", "--verbose", action="store_true", help="打印每个受管文件的判定")
+    ap.add_argument("--list", action="store_true", help="只列出受管文件与它们的类")
+    ap.add_argument("--why", action="store_true", help="打印规则清单与依据")
+    args = ap.parse_args()
+
+    if args.why:
+        print(WHY)
+        return 0
+
+    paths, skipped = collect(ROOT)
+
+    if args.list:
+        print(f"受管文档 {len(paths)} 个（跳过 {skipped} 个：trash/ reference/ legacy/ build/）\n")
+        print(f"{'类':8s} {'生成':6s} 路径")
+        for p in paths:
+            meta, _ = parse_front_matter(p.read_text(encoding="utf-8", errors="replace"))
+            meta = meta or {}
+            print(f"{meta.get('class','?'):8s} {meta.get('generated','?'):6s} "
+                  f"{p.relative_to(ROOT).as_posix()}")
+        return 0
+
+    errors, warnings = check(paths, ROOT)
+    remaining, shrunk, fixed = apply_baseline(errors)
+
+    print(f"文档门禁  {ROOT.name}")
+    print(f"受管 {len(paths)} 个 md（跳过 {skipped} 个：trash/ reference/ legacy/ build/）")
+    if load_baseline():
+        n_debt = sum(load_baseline().values())
+        print(f"债务清单 {len(load_baseline())} 条 / 共 {n_debt} 处（只减不增）")
+    print()
+
+    if args.verbose:
+        for p in paths:
+            meta, _ = parse_front_matter(p.read_text(encoding="utf-8", errors="replace"))
+            meta = meta or {}
+            print(f"  · {p.relative_to(ROOT).as_posix():52s} {meta.get('class','?'):7s} "
+                  f"generated={meta.get('generated','?')}")
+        print()
+
+    for rule, path, msg in remaining:
+        print(f"❌ {rule}  {path}\n      {msg}")
+    for rule, path, msg in warnings:
+        print(f"⚠️  {rule}  {path}\n      {msg}")
+
+    if shrunk:
+        print()
+        for rule, path, was, now in shrunk:
+            print(f"ℹ️  债务减少：{rule} {path} —— baseline 写 {was}，实际 {now}。"
+                  f"请把 scripts/doc_lint_baseline.txt 改成 {now}。")
+    if fixed:
+        print()
+        for rule, path, was in fixed:
+            print(f"ℹ️  债务已清：{rule} {path}（原 {was} 处）—— 从 baseline 里删掉这一行。")
+
+    print()
+    if remaining:
+        print(f"❌ {len(remaining)} 处违规 —— 门禁不通过")
+        return 1
+    print(f"✅ 全部通过（{len(warnings)} 条提示）")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -6,6 +6,10 @@ cmake-build-debug/
 .idea/
 *.iml
 
+# Python
+__pycache__/
+*.pyc
+
 # 参考库（只读，来源可拉取，不进版本库）
 reference/
 
