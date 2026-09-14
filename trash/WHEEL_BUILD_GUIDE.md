@@ -3,7 +3,7 @@
 > 日期：2026-08-22
 > 定位：kinematics（✅）→ TwistAccLimiter（✅）→ **Wheel** → LineFollower
 > 素材：legacy `Lib/control/wheel/wheel.c` + `Lib/algorithm/{dsp,pid}`（C 代码，需移植）
-> **开发工作流：SemVer + 渐进稳定分支 → 见 `control/wheel/docs/GIT_BRANCHING.md`（跟着走就是完整 git branching 流程）**
+> **开发工作流：SemVer + 渐进稳定分支 → 见 `control/wheel/docs/GIT.md`（跟着走就是完整 git branching 流程）**
 
 ## 0. 一句话
 

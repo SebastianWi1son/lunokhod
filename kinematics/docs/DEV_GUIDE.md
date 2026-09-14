@@ -1,6 +1,13 @@
+---
+class: work
+generated: false
+---
+> **类：D 施工单（临时物）** —— 阶段 1~3 已完成，阶段 4~5 未开工。**验收后进 trash/**；代码本身才是唯一源。
+> 文档体系与写作规则：../../docs/README.md
+
 # Kinematics 开发指南（伪代码版）
 
-> 配套文档：`DESIGN.md`（架构/公式）、`THEORY_AND_REFERENCE.md`（理论推导）
+> 配套文档：`DESIGN.md`（架构/公式）、`THEORY.md`（理论推导）
 > 本文是"怎么做"的操作流程，伪代码 = 执行步骤，不是最终代码形状。
 
 ---
@@ -238,7 +245,7 @@ private:
 | `SlewRateLimiter` | slew rate = 变化率 | 行业术语，准确但英文门槛 |
 | `RampFilter` | 斜坡滤波 | 弱化"限制"语义 |
 
-方法名对照：`limit()` / `step()` / `update()`——legacy 风格是 `wheel_update` / `pid_calculate` / `dsp_ramp_calc`。命名三原则评估后自选，把结论写进 AGENT.md。
+方法名对照：`limit()` / `step()` / `update()`——legacy 风格是 `wheel_update` / `pid_calculate` / `dsp_ramp_calc`。命名三原则评估后自选，把结论写进 AGENTS.md。
 
 ### 3.7 验收标准
 

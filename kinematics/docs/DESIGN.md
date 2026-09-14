@@ -1,3 +1,10 @@
+---
+class: fact
+generated: false
+---
+> **类：B 事实** —— **唯一来源**：别处只许链接，不许复制；改决策只改这里。 kinematics 设计权威；⚠️ 本文已知与代码漂移，清单见 IMPL.md §7。
+> 文档体系与写作规则：../../docs/README.md
+
 # Kinematics — 通用平面小车运动学库
 
 ## 产品定位
@@ -107,7 +114,7 @@ auto [out, vx_lim, vy_lim, wz_lim] = limiter.limit(cmd, dt);  // 平滑限幅 + 
 
 - v1 范围：**每通道加速度斜坡**（限变化率，保 Twist 几何一致性）。不含速度上限、Jerk、联合约束（功率/安全层职责，属后续）
 - 为什么是小礼包：限幅是应用层策略，行业惯例放上层（ROS 导航栈 acc_lim、驱动器固件 ramping）
-- 完整设计决策与伪代码：`docs/DEV_GUIDE_PSEUDOCODE.md` STAGE 3
+- 完整设计决策与伪代码：`DEV_GUIDE.md` STAGE 3（同目录）
 
 ## 刻意不覆盖的范围
 
@@ -130,16 +137,15 @@ auto [out, vx_lim, vy_lim, wz_lim] = limiter.limit(cmd, dt);  // 平滑限幅 + 
 
 **核心差异化**：市面没有"零依赖 header-only + 全部线性底盘 + 嵌入式可用"的运动学库。
 
-## 预期规模
+## 规模
 
-| 指标 | 预期 |
-|------|------|
-| 核心代码量 | < 300 行 |
-| 头文件数 | 5-6 个 |
-| 编译依赖 | 仅 `<cmath>` |
-| C++ 标准 | C++17 |
-| 预期 Stars (2年) | 100-250 |
-| 乐观 Stars (5年) | 300-600 |
+> 本节原为“**预期规模**”（含 Stars 预测），2026-09-14 按 `../../docs/TODO.md` P13 **删除**。
+>
+> **为什么删**：B 类事实文档里**不许有主观预测** —— 预测必然过期，而且会被后来的读者当真。
+> 被删的内容里，\<300 行核心代码 / 5-6 个头文件已被实测证伪（实际分别是 1071 行 / 7 个）。
+>
+> 依赖与标准（仅 `<cmath>` / `<cstdint>`、C++17）已在「核心设计原则」；
+> 实际行数、文件清单属于 C 类状态，见 [`IMPL.md`](IMPL.md)。
 
 ## 项目结构
 
@@ -147,7 +153,7 @@ auto [out, vx_lim, vy_lim, wz_lim] = limiter.limit(cmd, dt);  // 平滑限幅 + 
 kinematics/
 ├── docs/
 │   ├── DESIGN.md              ← 本文件
-│   └── THEORY_AND_REFERENCE.md  ← 理论参考资料
+│   └── THEORY.md  ← 理论参考资料
 ├── include/
 │   └── kinematics/
 │       ├── kinematics.hpp     ← 用户唯一入口
@@ -159,7 +165,7 @@ kinematics/
 ├── examples/
 │   ├── differential_drive_example.cpp
 │   ├── mecanum_drive_example.cpp
-│   └── dual_sensor_fusion.cpp ← SensorFusion 模板（见 sensor_fusion/docs/）
+│   └── dual_sensor_fusion.cpp ← SensorFusion 模板（**至今未实现**；原 `sensor_fusion/` 已移入 `trash/`）
 ├── tests/
 │   └── test_kinematics.cpp
 └── README.md

@@ -1,8 +1,15 @@
+---
+class: status
+generated: false
+---
+> **类：C 状态** —— **跟代码变**。⚠️ 与代码天然重复，建议降级为「一屏文件地图 + 追加式变更记录」，见 trash/README.md。
+> 文档体系与写作规则：../../../docs/README.md
+
 # TwistAccLimiter 实现真相文档（以代码为准）
 
 > 生成日期：2026-08-22
 > 本文档描述 `control/twist_acc_limiter/` 下**实际存在的代码**，一切以源码为准。
-> 根目录 `docs/` 的 DEV_GUIDE_PSEUDOCODE.md STAGE 3 是本模块的设计源头（当时叫 `speed_limiter.hpp`，规划放 kinematics 内 header-only），与现状的差异见 §6，问题见 §7。
+> 根目录 `docs/` 的 DEV_GUIDE.md STAGE 3 是本模块的设计源头（当时叫 `speed_limiter.hpp`，规划放 kinematics 内 header-only），与现状的差异见 §6，问题见 §7。
 > 维护规则：**改代码必须同步改本文档**；冲突时以代码为准并当场修正文档。
 
 ---
@@ -102,12 +109,12 @@ if (dt <= 0.0f) {
 | 4 | dt≤0 直通返回、**不更新** prev_ | 直通**且** `prev_ = t_cmd`（修复回跳 bug，含回归测试；伪代码是过时真相） |
 | 5 | 结构化绑定用法 `auto [out, vx_lim, ...] = limiter.limit(...)` | 实际代码/测试用 `r.out_`、`r.is_vx_lim_` 成员访问 |
 | 6 | DESIGN.md 架构树把 speed_limiter.hpp 画在 kinematics 内 | 已迁出，DESIGN.md 未回改 |
-| 7 | 上报机制"方案 a LimitResult 返回式" | ✅ 一致，已实现（AGENT.md 记录的选型落地） |
+| 7 | 上报机制"方案 a LimitResult 返回式" | ✅ 一致，已实现（AGENTS.md 记录的选型落地） |
 
 ## 7. 问题清单（只记录，不修改）
 
 - **P1（测试缺口）** `reset()` 无任何测试用例（T1~T6 + 防御均未覆盖）；构造后首帧行为有覆盖，reset 后首帧行为没有。
-- **P2（文档债）** 最终命名 `TwistAccLimiter`、模块从 kinematics 迁出到 control/ 这两个决策，未回写到根 docs/（DESIGN.md 架构树、DEV_GUIDE STAGE 3、AGENT.md 的"speed_limiter.hpp"表述全部过时）。
+- **P2（文档债）** 最终命名 `TwistAccLimiter`、模块从 kinematics 迁出到 control/ 这两个决策，未回写到根 docs/（DESIGN.md 架构树、DEV_GUIDE STAGE 3、AGENTS.md 的"speed_limiter.hpp"表述全部过时）。
 - **P3（文档债）** DEV_GUIDE 3.3 伪代码的 dt≤0 分支与实现相反（§6-4），后续照伪代码复刻会重新引入回跳 bug——建议作者在根文档或本文档锚定"以本文档 §4.2 为准"。
 - **P4（覆盖缺口，属已知范围）** 无速度上限（max_vel）、无 Jerk、无联合约束——DESIGN.md 已声明为 v1 刻意不覆盖，非缺陷，列此存档。
 - **P5（卫生）** 仓库目录里留有 `build/`、`cmake-build-debug/` 构建产物目录，无 .gitignore 管理（若入 git 会污染版本库）。

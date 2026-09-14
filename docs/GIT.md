@@ -1,3 +1,10 @@
+---
+class: fact
+generated: false
+---
+> **类：B 事实** —— **唯一来源**：别处只许链接，不许复制；改决策只改这里。 全局 git 工作流（2026-09-13 从 control/wheel/docs/ 上移，内容未改，其中 wheel 为示例）。
+> 文档体系与写作规则：README.md
+
 # wheel 开发工作流：SemVer + 渐进稳定分支
 
 > 目标：**跟着本文档走完每一步，就是一个清晰、可照做的 git branching 流程。**

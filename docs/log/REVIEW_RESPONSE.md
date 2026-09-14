@@ -1,3 +1,10 @@
+---
+class: log
+generated: false
+---
+> **类：A 日志** —— **只增不改**：每条带日期，永不回头编辑老条目，**不代表当前状态**。
+> 文档体系与写作规则：../README.md
+
 # 外部评审查验报告（REVIEW RESPONSE）
 
 > 日期：2026-08-22
@@ -12,7 +19,7 @@
 |---|---|---|
 | 根目录无 git | ✅ | `lunokhod/` 无 `.git`；docs/（ARCHITECTURE/DESIGN/复盘）不在任何版本控制 |
 | 三仓互不关联 | ✅ | kinematics / control/twist_acc_limiter / control/wheel 各自独立 |
-| kinematics 工作树脏 | ✅ | **5 个**（评价说 4 个）docs 文件未提交删除（DESIGN/DEV_GUIDE_PSEUDOCODE/STAGE1/STAGE2/THEORY_AND_REFERENCE）+ `M CMakeLists.txt` + `M inc/drive_omni.hpp` + `M inc/kinematics.hpp` |
+| kinematics 工作树脏 | ✅ | **5 个**（评价说 4 个）docs 文件未提交删除（DESIGN/DEV_GUIDE/STAGE1/STAGE2/THEORY）+ `M CMakeLists.txt` + `M inc/drive_omni.hpp` + `M inc/kinematics.hpp` |
 | twist_acc_limiter 工作树脏 | ✅ | `AM .gitignore` + `M test/...` + `?? docs/` |
 | 风险结论 | ✅ | 工作树与提交不一致，未提交改动确实可能丢 |
 
@@ -20,7 +27,7 @@
 
 | 子项 | 验证 | 证据 |
 |---|---|---|
-| P1 jacobian 循环 | ✅ 漂移 | **代码已修复**：`kinematics.hpp:24` 循环到 `wn`（运行时）；**文档未更**：IMPLEMENTATION_TRUTH.md §8-P1 仍写"循环上界用 N…建议改为 i<wn" |
+| P1 jacobian 循环 | ✅ 漂移 | **代码已修复**：`kinematics.hpp:24` 循环到 `wn`（运行时）；**文档未更**：IMPL.md §8-P1 仍写"循环上界用 N…建议改为 i<wn" |
 | P2 omni forward | ✅ 漂移 | **代码已修复**：`drive_omni.hpp:23-42` 已是通用 N 轮伪逆（循环 wn_、含 gamma_）；**文档未更**：§8-P2 仍写"硬编码 3 轮 γ=0" |
 | dual_sensor_fusion.cpp | ✅ 属实 | `kinematics/examples/` 只有 example.cpp + simulation_demo.cpp；README 声称的完整示例文件**不存在**（该 README 自定位"宣传素材"，但文件缺失是事实） |
 | DESIGN.md omni 符号 | ✅ 属实 | DESIGN.md 写 `ω = sin·Vx − cos·Vy`，代码 `J[i][0]=−sin/…, J[i][1]=cos/…`——**符号相反**且文档未回改 |
@@ -51,13 +58,13 @@
 
 1. **文档删除数量**：评价说 4 个，实际 **5 个**
 2. **simulation_demo target**：评价"P3 属实"基于已提交 HEAD；工作树已补 target + 加 -Werror（未提交）
-3. **P1/P2 方向判断正确**：评价说"代码已修复、文档没更新"——**验证成立**，但更准确的说法是：代码在某个时间点被修了，而 IMPLEMENTATION_TRUTH.md（号称"以代码为准的真相"）没有跟着回改，这本身就是自定的规矩被破坏
+3. **P1/P2 方向判断正确**：评价说"代码已修复、文档没更新"——**验证成立**，但更准确的说法是：代码在某个时间点被修了，而 IMPL.md（号称"以代码为准的真相"）没有跟着回改，这本身就是自定的规矩被破坏
 
 ## 三、行动建议（按性价比排序）
 
 | # | 动作 | 成本 | 对应 PENDING |
 |---|---|---|---|
-| 1 | 真相文档回改：IMPLEMENTATION_TRUTH.md P1/P2 标记"已修复"、P3 标记"已加 target" | 10 分钟 | P6 术语同步（扩） |
+| 1 | 真相文档回改：IMPL.md P1/P2 标记"已修复"、P3 标记"已加 target" | 10 分钟 | P6 术语同步（扩） |
 | 2 | 工作树收尾：kinematics + twist_acc_limiter 未提交改动补 commit（docs 移出是既定决策，正式落盘） | 10 分钟 | P5 docs 去留 |
 | 3 | 根级版本控制决策：并仓（推荐）vs 维持三仓 + 根级 docs 仓 | 半天 | 新增 P10 |
 | 4 | PID 默认语义：0=不限制 vs sentinel——**与 wheel 已定案的"0=disabled"惯例冲突**，需先决策再改（可能影响 wheel v0.2.0） | 1 天含决策 | 新增 P11 |

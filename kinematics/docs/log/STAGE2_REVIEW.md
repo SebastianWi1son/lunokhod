@@ -1,3 +1,10 @@
+---
+class: log
+generated: false
+---
+> **类：A 日志** —— **只增不改**：每条带日期，永不回头编辑老条目，**不代表当前状态**。
+> 文档体系与写作规则：../../../docs/README.md
+
 # Stage 2 复盘（mecanum + omni + 翻译官收敛）
 
 > 阶段 2 完成：三底盘（diff/mecanum/omni）+ `jacobian_apply` 翻译官 + 架构命名语义修正。
