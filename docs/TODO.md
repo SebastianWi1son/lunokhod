@@ -154,10 +154,11 @@ generated: false
 - **下一步**：决策后执行；注意 wheel v0.1.0 已发布，提取是 v0.2.0 的变更（破坏性）
 - **优先级**：🟡 中（两项目都已发布，随时可做）
 
-### P4. kinematics 分支名统一 ⬜ 未执行
-- **内容**：本地 `main` vs 远端 `master` 不一致
-- **下一步**：`git branch -m main master` + 远端处理（或反方向）
-- **优先级**：🟡 中
+### P4. 分支名统一 ✅ **已完成（2026-09-14）**
+- **结果**：两个仓库（lunokhod / foucault）**本地与远端全部统一为 `main`**，旧 `master` 已删除
+- **过程**：远端 URL 从 HTTPS 改成 SSH（HTTPS 没配凭证助手）→ 改默认分支 → `push main` → 删 `master`
+- **教训**：改默认分支必须在网页操作（`PATCH /repos/...` 需 token）；
+  不先改默认分支直接删会被拒：`refusing to delete the current branch`
 
 ### P5. kinematics docs 去留 ⬜ 待拍板
 - **内容**：(a) 仓库保留副本（开源库惯例）vs (b) 瘦身纯代码库（README 指路上级目录）
