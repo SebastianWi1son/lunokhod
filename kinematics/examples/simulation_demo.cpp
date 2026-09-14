@@ -23,9 +23,15 @@ bool simulate(const char* name, Chassis& ch, const Leg* legs, int n, float dt) {
         for (int s = 0; s < steps; ++s) {
             WheelSpeeds ws   = ch.inverse_kinematics(legs[i].cmd);
             Twist       meas = ch.forward_kinematics(ws);
-            x     += meas.vx_ * std::cos(theta) * dt - meas.vy_ * std::sin(theta) * dt;
-            y     += meas.vx_ * std::sin(theta) * dt + meas.vy_ * std::cos(theta) * dt;
+            // 半隐式欧拉（与 odometry 的 R6 统一）：先积分 yaw，再用【新】yaw 旋转位移
+            //
+            // 注：本 demo 两条写法输出逐字符相同 —— 因为路径闭合且对称，
+            //     显式的 +φ/2 滞后与半隐式的 −φ/2 超前成对抵消。
+            //     统一写法是为了与 odometry 同源，不是为了改数值。
             theta += meas.wz_ * dt;
+            const float cos_t = std::cos(theta), sin_t = std::sin(theta);
+            x     += meas.vx_ * cos_t * dt - meas.vy_ * sin_t * dt;
+            y     += meas.vx_ * sin_t * dt + meas.vy_ * cos_t * dt;
             plot(x, y);
         }
         printf("  第 %d 段: (%.4f, %.4f, θ=%.4f)\n", i + 1, x, y, theta);
