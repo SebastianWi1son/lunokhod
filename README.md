@@ -57,6 +57,23 @@ target_link_libraries(fw PRIVATE kinematics)
 
 所有 target 都开在 `-Wall -Wextra -Werror`（告警即错误）。
 
+## 推之前先本地跑一遍 CI
+
+```bash
+scripts/ci_local.py            # 用工作区当前状态（含未提交改动），~7 秒
+scripts/ci_local.py --clean    # 用 git HEAD 新建 clone —— 查“有东西忘了提交”
+scripts/ci_local.py --job aggregate     # 只跑一个 job
+scripts/ci_local.py --list              # 看有哪些 job
+```
+
+它解析 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)，对每个 job 展开
+`matrix`、跳过 `uses:` 步骤、在**独立临时工作区**里逐条执行 `run:` —— 就是 runner 干的事。
+
+**为什么要它**：CI 跑在 GitHub 上（私有仓库拿日志要等 1~2 分钟）；本地 7 秒就有完整输出。
+
+> 局限：不模拟 runner 镜像（本机工具链版本可能与 `ubuntu-24.04` 不同）。
+> 缺命令的步骤会显示为 `⚠️ 跳过` 而非失败（如本机没装 `pip`）。
+
 ## 文档
 
 **先读 [`docs/README.md`](docs/README.md)** —— 它说明有哪些文档、各自属于哪一类、怎么写才不烂。

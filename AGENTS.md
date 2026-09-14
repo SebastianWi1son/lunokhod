@@ -125,7 +125,13 @@ endif()
 ## 8. git
 
 - **commit 由用户主导** —— AI 默认不 commit；消息用用户看得懂的中文。
-- 任何 git 操作前先 `git status`；文件移动用 `git mv`。
+- **push 前先在本地跑一遍 CI**：`scripts/ci_local.py`（约 7 秒）。
+  它解析 `.github/workflows/ci.yml` 并把每个 job 逐条真跑 ——
+  CI 在 GitHub 上，拿日志要等 1~2 分钟，本地先过一遍能省掉绝大多数来回。
+  加了新 link/新依赖时，另跑 `--clean`（用 git HEAD 新建 clone，查“忘了提交”）。
+- 任何 git 操作前先 `git status`；**`git add` 不会清空已有暂存区** ——
+  曾经的坑：`git mv` 是立即入暂存区的，随后 `git add <几个文件>` 会把重命名一并带上。
+- 文件移动用 `git mv`。
 - 分支与发布流程见 [`docs/GIT.md`](docs/GIT.md)。
 
 ## 9. 错误账本
