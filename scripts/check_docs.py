@@ -66,6 +66,39 @@ BARE_ANY = re.compile(rf"[\w./-]+\.{SRC_EXT}\b")
 
 # ───────────────────────── 基础工具 ─────────────────────────
 
+def nested_repos(root: Path, skip_under_skip_dirs: bool = True):
+    """顶层以下的【嵌套 git 仓库】—— 那是另一个项目，不属于本仓。
+
+    为什么需要：一个项目里同时住着“项目文档”和“独立发布的子库”是常见形态
+    （子库有自己的仓、自己的 CI）。
+
+    判据用 `.git` 目录本身，不维护目录名白名单 —— 白名单会跟实际的仓分布各说各话。
+    """
+    out = []
+    for p in root.rglob(".git"):
+        if not p.is_dir() or p.parent == root:
+            continue
+        rel = p.parent.relative_to(root)
+        if skip_under_skip_dirs and any(part in SKIP_DIRS for part in rel.parts):
+            continue  # reference/ 这类已在 SKIP_DIRS（供应商代码），不用它做存在性判据
+        out.append(rel)
+    return out
+
+
+def is_under(rel: Path, prefixes) -> bool:
+    return any(rel == pre or pre in rel.parents for pre in prefixes)
+
+
+def _git_ls(root: Path):
+    # -z + core.quotePath=false：不然 git 会把中文/空格文件名转义成
+    # "docs/log/\345\244\215\347\233\230.md" 这种形式，导致全部误判“不存在”。
+    out = subprocess.run(
+        ["git", "-c", "core.quotePath=false", "-C", str(root),
+         "ls-files", "-z", "-co", "--exclude-standard"],
+        capture_output=True, text=True, check=True).stdout
+    return {p for p in out.split("\0") if p}
+
+
 def tracked_files(root: Path):
     """仓库里【应当存在】的文件（相对路径集合）。
 
@@ -75,17 +108,22 @@ def tracked_files(root: Path):
     为什么带 `--others --exclude-standard`：只看 `--cached` 的话，
     刚建好还没 `git add` 的新文件会被判成“不存在”，写文档时很难用。
     加上未跟踪但未被 ignore 的文件，既修了这个坑，又仍然把 `reference/` 挡在外面。
+
+    为什么要并上【嵌套子仓】的文件：项目级文档里画子库的目录树，是合法且常见的
+    （“foc 库长这样”）。子仓是独立仓库，它的文件不在本仓的 `git ls-files` 里
+    —— 不并进来的话，如实描述子库布局反倒全被误判成“文件不存在”。
+    子仓自己的文档由【它自己的门禁】管（它有自己的仓与 CI）。
     """
     try:
-        # -z + core.quotePath=false：不然 git 会把中文/空格文件名转义成
-        # "docs/log/\345\244\215\347\233\230.md" 这种形式，导致全部误判“不存在”。
-        out = subprocess.run(
-            ["git", "-c", "core.quotePath=false", "-C", str(root),
-             "ls-files", "-z", "-co", "--exclude-standard"],
-            capture_output=True, text=True, check=True).stdout
-        return {p for p in out.split("\0") if p}
+        files = _git_ls(root)
     except Exception:  # 非 git 环境（打包分发等）→ 退回扫盘
         return {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}
+    for sub in nested_repos(root):
+        try:
+            files |= {(sub / f).as_posix() for f in _git_ls(root / sub)}
+        except Exception:
+            pass
+    return files
 
 
 def is_external(root: Path, tok: str) -> bool:
@@ -115,9 +153,10 @@ _IGNORE_CACHE = {}
 def collect(root: Path):
     """返回 (受管文件列表, 跳过的文件数)"""
     managed, skipped = [], 0
+    subs = nested_repos(root)
     for p in sorted(root.rglob("*.md")):
         rel = p.relative_to(root)
-        if any(part in SKIP_DIRS for part in rel.parts):
+        if any(part in SKIP_DIRS for part in rel.parts) or is_under(rel, subs):
             skipped += 1
             continue
         managed.append(p)
@@ -183,14 +222,46 @@ def drop_planned(text: str) -> str:
                      if not any(mk in ln for mk in PLANNED_MARKS))
 
 
+TREE_CHARS = "├└│─┌┐┘┴┬┤"
+# 代码标点：一行里出现这些，就说明它是在【贴代码】而不是【列文件】。
+# 只用 ASCII —— 中文标点（，；（））在文件清单的注释里很常见，不能当代码。
+CODE_PUNCT = ";{}(),=+"
+
+
+def _is_layout_line(ln: str, m) -> bool:
+    """这一行是在【声称仓库布局】，还是只是在【贴一段代码】？
+
+    为什么需要：代码块里也会出现像文件名的东西 —— 最典型的是 C++ 的成员访问
+    `abc_ac.c`（结构体 `abc_ac` 的字段 `c`），它长得和 `.c` 源文件一模一样。
+    不区分的话，“贴代码”会被当成“声称仓库里有个 files”。
+
+    判据（宁松勿严 —— 漏一个不如误报一堆）：
+      · 行里有目录树字符（├ └ │ ─）          → 目录树
+      · 行首（去空白后）是 - * # |           → 文件清单
+      · 这个 token 是行内第一个非空白 token，且后面没有代码标点
+        （`abc_ac.c, abc_ac.b` 后面有逗号；`abc_ac.c + center };` 后面有 `+ } ;`）
+        —— 那两种都是代码里的成员访问 / 表达式续行，不是文件清单
+    """
+    if any(c in ln for c in TREE_CHARS):
+        return True
+    if ln.lstrip()[:1] in "-*#|":
+        return True
+    head = ln[:m.start()].rstrip()
+    if head and not all(c in TREE_CHARS for c in head.lstrip()):
+        return False  # 前面还有别的代码 → 不是清单
+    return not any(c in ln[m.end():] for c in CODE_PUNCT)
+
+
 def bare_names(fenced: str):
-    """代码块里【不带反引号】的文件名（目录树 / 架构图 / 构建命令）。
+    """代码块里【不带反引号】的文件名（目录树 / 文件清单）。
 
     去掉 `//` 之后的内容 —— 那是注释里的引用（多半指外部库），不是对仓库布局的声称。
+    并且只取【处于布局位置】的（见 `_is_layout_line`）—— 代码块里的 C++ 代码不算。
     """
     for ln in fenced.splitlines():
         for m in BARE_ANY.finditer(ln.split("//", 1)[0]):
-            yield m.group(0)
+            if _is_layout_line(ln, m):
+                yield m.group(0)
 
 
 # ───────────────────────── 规则 ─────────────────────────
@@ -377,6 +448,13 @@ def main():
     if args.why:
         print(WHY)
         return 0
+
+    # 防呆：脚本必须住在 <仓库>/scripts/ 下（ROOT 由脚本位置反推）。
+    # 拷到 /tmp 之类的地方跑，会让 ROOT 变成 `/`，然后 rglob 一路爬进 /proc 崩掉。
+    if ROOT == ROOT.parent:
+        print(f"❌ 脚本位置不对：ROOT 解析成了文件系统根 `{ROOT}`。\n"
+              f"   它必须放在 <仓库>/scripts/check_docs.py —— ROOT = 脚本所在目录的上一级。")
+        return 2
 
     paths, skipped = collect(ROOT)
 

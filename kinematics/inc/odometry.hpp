@@ -54,8 +54,8 @@ public:
 private:
     // wrap to (-pi, pi]
     static float wrap_(float y) {
-        const float pi = 3.14159265358979323846f;
-        const float tp = 6.28318530717958647692f;
+        constexpr float pi = 3.14159265358979323846f;
+        constexpr float tp = 6.28318530717958647692f;
 
         float r = std::fmod(y + pi, tp);
         if (r < 0.0f) { r += tp; }
