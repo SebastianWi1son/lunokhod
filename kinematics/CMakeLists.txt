@@ -6,6 +6,24 @@ set(CMAKE_CXX_STANDARD 17)              # CPP STANDARD
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ===========================================================================
+# 依赖 contracts（契约唯一来源）
+#
+# 优先用【消费方已经引入】的 target；没有才回退到本地相对路径。
+# 为什么这么写：如果这里无条件 add_subdirectory，那么同时引 contracts 和
+# kinematics 的工程会把 contracts 添加两次 → CMake 报 target 重名。
+# ===========================================================================
+if(NOT TARGET contracts)
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../contracts/CMakeLists.txt)
+        add_subdirectory(../contracts ${CMAKE_BINARY_DIR}/_ext/contracts)
+        message(STATUS "kinematics: 独立构建 -> 自动引入本地 contracts")
+    else()
+        message(FATAL_ERROR
+            "kinematics 需要 target `contracts`。\n"
+            "请在使用方工程里先 add_subdirectory(<lunokhod>/contracts ...) 或 FetchContent。")
+    endif()
+endif()
+
+# ===========================================================================
 # 库本体 —— 唯一的**对外产物**
 #
 # 消费方只需要一行就能用上这个库：
@@ -14,6 +32,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # ===========================================================================
 add_library(kinematics INTERFACE)
 target_include_directories(kinematics INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/inc)
+target_link_libraries(kinematics INTERFACE contracts)
 
 # ===========================================================================
 # ⚠ 两种构建模式（统一约定 LUNOKHOD_DEV_BUILD）
@@ -63,21 +82,6 @@ target_compile_options(simulation_demo PRIVATE -Wall -Wextra -Werror)
 add_test(NAME simulation_demo COMMAND simulation_demo)
 
 # ---------------------------------------------------------------------------
-# odometry：源码 inc/odometry.hpp 由作者手写（AGENTS.md：AI 禁改 inc/）。
-# 头文件未落地前不注册 target —— 保证仓库始终"全绿"。
-# 金标重生：python3 test/tools/gen_odometry_golden.py
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/inc/odometry.hpp)
-    add_executable(test_odometry test/test_odometry.cpp)
-    target_link_libraries(test_odometry PRIVATE kinematics)
-    target_compile_options(test_odometry PRIVATE -Wall -Wextra -Werror)
-    add_test(NAME test_odometry COMMAND test_odometry)
-
-    # 开发 / 分析工具（**不是**库示例）：仿真跑一遍 + 导 CSV，供 tools/plot_odometry.py 画图
-    # 用途：打滑检测的原料采集、底盘建模、复盘分析（见 docs/TODO.md P19）
-    add_executable(odometry_demo tools/odometry_demo.cpp)
-    target_link_libraries(odometry_demo PRIVATE kinematics)
-    target_compile_options(odometry_demo PRIVATE -Wall -Wextra -Werror)
-    message(STATUS "kinematics: 已注册 test_odometry + odometry_demo")
-else()
-    message(STATUS "kinematics: 尚无 inc/odometry.hpp -> 跳过 odometry 相关 target")
-endif()
+# odometry 已独立成组件（`../odometry/`），不再在本库注册。
+# 它的测试与工具现在跟着它自己走，见 odometry/CMakeLists.txt。
+# ---------------------------------------------------------------------------

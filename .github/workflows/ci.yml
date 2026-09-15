@@ -2,7 +2,7 @@ name: CI
 
 # 五件事：
 #   ① 开发者视角：一键构建 + 全量测试
-#   ② 守护「每个库都能独立构建」这个性质
+#   ② 守护「每个库都能独立构建」这个性质，且测试条数不静默变化
 #   ③ 守护「被消费时进入库模式、不泄漏测试可执行文件」这个性质
 #   ④ 金标可复现（重跑生成器 → 必须无 diff）
 #   ⑤ 文档门禁（把 docs/README.md 的规矩变成机器判）
@@ -41,6 +41,17 @@ jobs:
       - run: ctest --test-dir build --output-on-failure
 
   # ── ② 每个库单独构建（对应 README 用法 ②）────────────────────────────
+  #
+  # ⚠ 为什么还多一步“核对测试条数”，而不是只跑 ctest：
+  #   contracts 是纯类型库，**一条测试也没有** —— ctest 在无测试时退出码非零。
+  #   能忍过去的最简单写法是 --no-tests=ignore，但那会重新打开一个已修过的洞：
+  #   2026-09-13 的教训就是 “ctest 报 No tests were found，却靠手跑可执行文件冒充全绿”。
+  #   所以把【期望的测试条数】写死，少了 / 多了都红。
+  #
+  # ⚠ 为什么不用 matrix.include 写（更自然的写法）：
+  #   scripts/ci_local.py 只支持 matrix.<key> = [列表] 的笛卡尔积形式，
+  #   它看到 include/exclude 会直接跳过（见其 matrix_combos）。
+  #   本步要保持“本地能真跑一遍”，所以计数用 case 查表放在脚本里。
   standalone:
     name: 独立构建 / ${{ matrix.component }}
     runs-on: ubuntu-24.04
@@ -48,14 +59,41 @@ jobs:
       fail-fast: false
       matrix:
         component:
+          - contracts
           - kinematics
+          - odometry
           - control/wheel
           - control/twist_acc_limiter
     steps:
       - uses: actions/checkout@v4
       - run: cmake -S "${{ matrix.component }}" -B build -DCMAKE_BUILD_TYPE=Debug
       - run: cmake --build build -j"$(nproc)"
-      - run: ctest --test-dir build --output-on-failure
+      - name: 跑测试并核对条数
+        run: |
+          case "${{ matrix.component }}" in
+            contracts)                 want=0 ;;   # 纯类型库，无测试
+            kinematics)                want=3 ;;
+            odometry)                  want=1 ;;
+            control/wheel)             want=2 ;;
+            control/twist_acc_limiter) want=5 ;;   # 自身 2 + 引导进来的 kinematics 3
+            *) echo "❌ 矩阵里新增了组件但忘了在这里登记期望条数"; exit 1 ;;
+          esac
+          # 先数条数再跑 —— 这样 contracts（want=0）不会因 “无测试时 ctest 退非零” 而假红，
+          # 而真正有测试的组件仍然不会静默变 0。
+          # ⚠ 不能用 grep 'add_test' build/CTestTestfile.cmake 数：
+          #   子目录（如引导进来的 kinematics）的测试在 _ext/.../CTestTestfile.cmake 里，
+          #   只数根目录那份会漏掉它们（twist_acc_limiter 会数成 2 而不是 5）。
+          got=$(ctest --test-dir build -N 2>/dev/null | grep -cE '^ *Test +#' || true)
+          echo "注册的测试条数：$got（期望 $want）"
+          if [ "$got" -ne "$want" ]; then
+            echo "❌ 测试条数不对 —— 少了=测试被静默丢掉；多了=有预期外的 target 被挂上"
+            exit 1
+          fi
+          if [ "$got" -gt 0 ]; then
+            ctest --test-dir build --output-on-failure
+          else
+            echo "（本组件无测试，已跳过 ctest —— 这是预期的）"
+          fi
 
   # ── ③ 库模式：被消费时只出库，不生成测试/示例（对应 README 用法 ③）──────
   consumer-mode:
@@ -77,22 +115,27 @@ jobs:
           if(NOT LUNOKHOD_ROOT)
             message(FATAL_ERROR "请传 -DLUNOKHOD_ROOT=<lunokhod 根目录>")
           endif()
+          add_subdirectory(${LUNOKHOD_ROOT}/contracts ext/contracts)
           add_subdirectory(${LUNOKHOD_ROOT}/kinematics ext/kinematics)
+          add_subdirectory(${LUNOKHOD_ROOT}/odometry ext/odometry)
           add_subdirectory(${LUNOKHOD_ROOT}/control/wheel ext/wheel)
           add_subdirectory(${LUNOKHOD_ROOT}/control/twist_acc_limiter ext/tal)
           add_executable(app main.cpp)
           target_compile_options(app PRIVATE -Wall -Wextra -Werror)
-          target_link_libraries(app PRIVATE kinematics wheel twist_acc_limiter)
+          target_link_libraries(app PRIVATE contracts kinematics odometry wheel twist_acc_limiter)
           EOF
           cat > /tmp/consumer/main.cpp <<'EOF'
           #include "chassis.hpp"
+          #include "odometry.hpp"
           #include "twist_acc_limiter.hpp"
           #include "wheel.hpp"
           int main() {
               MecanumDrive    chassis(0.10f, 0.12f, 0.03f);
               TwistAccLimiter limiter(1.5f, 1.5f, 4.0f);
+              Odometry        odom;
               (void)chassis.inverse_kinematics(Twist{0.5f, 0.0f, 0.0f});
               (void)limiter.limit(Twist{0.5f, 0.0f, 0.0f}, 0.001f);
+              odom.update(Twist{0.5f, 0.0f, 0.0f}, 0.001f, 1u);
               return 0;
           }
           EOF
@@ -126,6 +169,6 @@ jobs:
         #   此处锁定的是作者本地已验证过的版本；升级需同时重生金标并改这里。
         run: pip install numpy==1.26.4 scipy==1.11.4 sympy==1.12
       - name: 重新生成金标（生成器内部有五重自检，失败会直接退出）
-        run: python3 kinematics/test/tools/gen_odometry_golden.py
+        run: python3 odometry/test/tools/gen_odometry_golden.py
       - name: 与仓库里的文件比对 —— 有 diff 说明金标被手改过或生成器飘了
-        run: git diff --exit-code kinematics/test/odometry_golden.hpp
+        run: git diff --exit-code odometry/test/odometry_golden.hpp

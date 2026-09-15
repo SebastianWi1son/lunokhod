@@ -11,8 +11,9 @@ generated: false
 > 动因（用户原话）："常复用的 pid,dsp,ff 等算法打包成算法库上传 GitHub，实际开发按需 pull，
 > 过程中发现 pull 下来的代码可修改升级，push 回去同步所有用到的项目。
 > 猜想手敲的算法库多少会有可升级的地方，但未来多个项目不好同步。"
-> 现状：lunokhod 三件套（kinematics / twist_acc_limiter / wheel）各自独立仓库；**Ramp 算法在
-> wheel 与 twist_acc_limiter 各有一份**（PENDING P3 已标记的 DRY 问题）
+> 现状：lunokhod 五件套（contracts / kinematics / odometry / twist_acc_limiter / wheel）
+> 同一仓内各自独立消费（2026-09-15：原先写着“三件套…各自独立仓库”，那是当时的说法）；
+> **Ramp 算法在 wheel 与 twist_acc_limiter 各有一份**（PENDING P3 已标记的 DRY 问题）
 
 ## 现状盘点（哪些算法已有、在哪里）
 

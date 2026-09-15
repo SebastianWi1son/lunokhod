@@ -27,27 +27,34 @@ C++17 header-only 零依赖嵌入式底盘运动学库：输入本体系 `Twist 
 kinematics/
 ├── inc/                        ← 头文件根（设计文档写的是 include/，实际是 inc/）
 │   ├── chassis.hpp             ← **瞬时映射**对外聚合入口（用户只 include 这一个）
-│   ├── contracts.hpp           ← 数据契约：Twist / WheelSpeeds / Pose（POD）
 │   ├── kinematics.hpp          ← 数学核心：Kinematics<Derived> CRTP 基类 + jacobian_apply + k2PI
 │   ├── drive_diff.hpp          ← DiffDrive
 │   ├── drive_mecanum.hpp       ← MecanumDrive
-│   ├── drive_omni.hpp          ← OmniDrive
-│   └── odometry.hpp            ← 里程计：有状态积分器 + 可选记录（**opt-in，不进 chassis.hpp**）
+│   └── drive_omni.hpp          ← OmniDrive
 ├── test/
-│   ├── test_kinematics.cpp     ← 三底盘测试（手写 CHECK 宏，退出码即结果）
-│   ├── test_odometry.cpp       ← 里程计测试（140 断言，oracle 全部外部）
-│   ├── odometry_golden.hpp     ← ⚠ 自动生成，勿手改（gen_odometry_golden.py 产物）
-│   └── tools/gen_odometry_golden.py  ← 金标生成器（scipy / sympy / numpy 交叉验证）
+│   └── test_kinematics.cpp     ← 三底盘测试（手写 CHECK 宏，退出码即结果）
 ├── examples/
 │   ├── example.cpp             ← 三底盘 API 调用演示（CMake target: example_diff）
 │   └── simulation_demo.cpp     ← 2D 位姿积分仿真（CMake target: simulation_demo）
-├── src/                        ← 空目录（待清理：删掉，或说明为何保留）
 ├── legacy/                     ← 2024 年 C 语言 nav 参考实现（不属于本库）
 ├── CMakeLists.txt
 └── AGENTS.md                    ← 代理协作规则（inc/ 人写、test/ AI 写）
 ```
 
-## 3. 数据契约（inc/contracts.hpp）
+> **2026-09-15 迁出说明**：原先在本目录下的 `inc/contracts.hpp`、`inc/odometry.hpp`
+> 及其测试 / 金标生成器 / 工具已搬到两个新组件：
+>
+> | 原位置 | 现位置 |
+> |---|---|
+> | `inc/contracts.hpp` | [`../../contracts/inc/contracts.hpp`](../../contracts/inc/contracts.hpp) |
+> | `inc/odometry.hpp` · `test/test_odometry.cpp` · `test/odometry_golden.hpp` · `test/tools/gen_odometry_golden.py` · `tools/odometry_demo.cpp` · `tools/plot_odometry.py` · `docs/ODOMETRY_DESIGN.md` · `docs/log/ODOMETRY_FAQ.md` | [`../../odometry/`](../../odometry/) （见其 [`IMPL.md`](../../odometry/docs/IMPL.md)） |
+>
+> 因此本目录的 `tools/` 与 `test/tools/` 已不存在。
+
+## 3. 数据契约（现在位于 `../../contracts/inc/contracts.hpp`）
+
+> 契约提为独立库（2026-09-15）：它们不只属 kinematics，odometry 与 twist_acc_limiter 也靠它。
+> 下面是这些类型的定义 —— 它们是**本库的对外接口面**，所以仍在本代码地图里讲。
 
 ```cpp
 struct Twist {          // 输入：本体系速度
@@ -143,13 +150,15 @@ wz = Σuᵢ / (N·R)
 
 ## 6. 构建与测试（实测）
 
-- CMake ≥ 3.28，C++17。`add_library(kinematics INTERFACE)`（header-only），`target_include_directories` 暴露 `inc/`。
-- **四个** target，**全部**启用 `-Wall -Wextra -Werror`：`test_kinematics`、`example_diff`（= examples/example.cpp）、`simulation_demo`（L3 2D 位姿积分 demo）、`test_odometry`（**条件注册**：`inc/odometry.hpp` 存在才挂上）。
+- CMake ≥ 3.28，C++17。`add_library(kinematics INTERFACE)`（header-only），`target_include_directories` 暴露 `inc/`，`INTERFACE` 依赖 `contracts`。
+- **三个** target，**全部**启用 `-Wall -Wextra -Werror`：`test_kinematics`、`example_diff`（= examples/example.cpp）、`simulation_demo`（L3 2D 位姿积分 demo）。
+  （原先还有 `test_odometry`，2026-09-15 随 odometry 组件迁出。）
 - 2026-09-14 补了 `enable_testing()` + `add_test`：`ctest --test-dir build --output-on-failure` 现在**真能跑**（此前报 “No tests were found”）。
 - 测试方法论：锚点（手算有理数如 `50.0f/3.0f`）+ 互逆（forward∘inverse ≈ 恒等）+ 边界（零输入）；容差 1e-5，退出码即结果。
 - 手动编译命令（AGENTS.md 记载）：`g++ -std=c++17 -Wall -Wextra -Iinc test/test_kinematics.cpp`
 - **2026-08-22 实测**：`g++ -std=c++17 -Wall -Wextra -Werror -Iinc test/test_kinematics.cpp` → `ALL PASS`，退出码 0。
 - **2026-09-14 实测**：`ctest` → **4/4 Passed**；`test_odometry` → **140/140 断言**，零告警。
+- **2026-09-15 实测（odometry 迁出后）**：聚合 `ctest` → **8/8 Passed**；单库 `cmake -S kinematics` → **3/3 Passed**。
 
 ## 7. 与根目录设计文档的差异（漂移清单）
 
@@ -176,75 +185,20 @@ wz = Σuᵢ / (N·R)
 
 ---
 
-## 9. 增量记录：Odometry（2026-09-14）
+## 9. 增量记录
 
-> 本节按「**增量记录**」格式追加，不改写前面章节。
-> （IMPL 的目标形态：**一屏文件地图 + 追加式变更记录**，不再逐行复述代码）
-
-**文件**：`inc/odometry.hpp`（**opt-in，不进 `chassis.hpp`**）；`contracts.hpp` 增加 `Pose`。
-
-**性质**：本库**唯一有状态**的组件（与 `PID` 同类；`kinematics` 全是纯函数）。
-职责 = **积分 + 可选记录**（`sink == nullptr` 时一帧不记）。
-
-### 9.1 接口（5 个公开成员）
-
-| 成员 | 语义 |
-|---|---|
-| `Odometry(float twist_scale = 1.0f)` | 唯一构造参数 = 标定系数（**硬件属性**） |
-| `set_sink(SampleSink, void* ctx)` | 注册数据出口；nullptr = 不记录 |
-| `reset()` / `reset(const Pose&)` | **只清位姿**；`twist_scale_` / `sink_` **保留**（清状态，不清配置）。R12：带参重载 = 设到指定位姿 |
-| `update(twist, dt, tick, cmd, ws) → Pose` | 每帧一次；返回值与 `pose()` 同源 |
-| `pose()` / `yaw_continuous()` / `yaw_ref()` | wrap / 连续 / 连续（融合层校准源） |
-
-### 9.2 参数分两类（本组件最容易读错的地方）
-
-| 类别 | 字段 |
-|---|---|
-| **参与计算** | `body_twist`、`dt` |
-| **只作记录** | `tick`、`cmd`、`ws` |
-
-### 9.3 行为要点
-
-- **积分**：半隐式欧拉（R6）—— 先 `yaw_ += wz·dt`，再用**新** yaw 的 `cos/sin` 旋转位移。
-- **标定**：`twist_scale_` 乘 **vx / vy / wz 三个通道**（漏 `wz` → 每圈丢约 11°）。
-- **记录**：`ws == nullptr` 时**整帧不记**（R7）；样本里 `twist_` 是**标定后**的值，`cmd_` **原样**。
-- **yaw**：内部只存**一个连续值**；两个出口各取所需（连续 vs wrap），**不存第二个成员**。
-
-### 9.4 测试与金标（oracle 全部外部）
-
-| 文件 | 作用 |
-|---|---|
-| `test/test_odometry.cpp` | **140 断言，11 组**（金标 / 世界系旋转 / 收敛 / 零输入冻结 / reset / wrap / 单步 / scale 不变性 / sink / R7 防御 / **初始位姿（R12）**） |
-| `test/tools/gen_odometry_golden.py` | 金标生成器（**五重自检**，打印闭式 vs 循环 vs scipy 的偏差） |
-| `test/odometry_golden.hpp` | ⚠ 自动生成，勿手改 |
-
-**oracle 来源**：等比级数闭式（离散精确解）+ SE(2) 指数映射（连续真解，scipy DOP853 交叉验证）+ `numpy.angle`（wrap）+ **实测推导的容差**。
-
-### 9.5 验收记录
-
-- 手写者：作者本人（AI 未改 `inc/`）；测试由 AI 编写。
-- 首次手敲出现 3 个坑（契约字段名 / `vy*sin` / 同类型字段静默错位），**全部被测试抓到**；规则已入 `../AGENTS.md` 错误账本。
-- `ctest` → **4/4 Passed**；`test_odometry` → **140/140**；`-Wall -Wextra -Werror` 零告警。
-
-### 9.6 开发 / 分析工具
-
-| 文件 | 作用 |
-|---|---|
-| `tools/odometry_demo.cpp` | 四段场景（直行 / 圆弧 / 麦轮横移（注入 40% 打滑）/ 原地转）→ 导 `run.csv`（850 帧 × 15 列） |
-| `tools/plot_odometry.py` | `run.csv` → 四格图（轨迹 / yaw 出口 / 打滑信号 / 半隐式 vs 显式放大对比） |
-
-```bash
-cmake -S kinematics -B build && cmake --build build -j
-./build/odometry_demo run.csv
-python3 kinematics/tools/plot_odometry.py run.csv run.png
-```
-
-> 这两个是**工具**，不是库示例 —— 它们依赖 `inc/odometry.hpp`，但库本体不依赖它们。
-> **用途**：CSV 是打滑检测 / 底盘建模 / 复盘分析的原料（见 `../../docs/TODO.md` P19），
-> 也是将来实车数据回放与 PC 侧算法验证的入口。
-
-### 9.7 已知未闭合
-
-见 [`ODOMETRY_DESIGN.md`](ODOMETRY_DESIGN.md) §7b：
-**R12**（无初始位姿入口 —— 待拍板是否加 `reset(const Pose&)`）、
-**R13**（记录未解耦 —— 等第二个需要记录的组件出现再重开讨论）。
+> **2026-09-15：odometry 已独立成组件，本节整段迁走。**
+>
+> 迁移去向（**内容未删减，只是换了家**）：
+>
+> | 原本节内容 | 现位置 |
+> |---|---|
+> | §9.1 接口 / §9.2 参数分两类 / §9.3 行为要点 / §9.7 已知未闭合 | [`../../odometry/docs/IMPL.md`](../../odometry/docs/IMPL.md) |
+> | §9.4 测试与金标 / §9.6 开发-分析工具 | 同上 |
+> | §9.5 验收记录（含 3 个坑） | 同上，规则进 [`../../odometry/AGENTS.md`](../../odometry/AGENTS.md) §4 错误账本 |
+>
+> **为什么迁走**：odometry 的依赖只有 `contracts`（与运动学正/逆解无关），
+> 它是有状态、可选、非所有用户都需要的组件 —— 已提为独立库 `../../odometry/`。
+> 本节留在本文件里，等于 kinematics 的代码地图在记别的库。
+>
+> 本组件自己的增量记录：**暂无**（下次改本库存代码时从这里往下追加）。

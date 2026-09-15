@@ -7,10 +7,14 @@ generated: false
 
 # AGENTS.md — lunokhod/kinematics 项目代理指南
 
+> 2026-09-15：里程计（odometry）与数据契约（contracts）已从本组件**独立成库**：
+> 契约 → [`../contracts/`](../contracts/)；里程计 → [`../odometry/`](../odometry/)。
+> 下面关于它们的表述已相应修正，相关错误账本与代码地图也已随对象迁走。
+
 ## 项目定位
 
 C++17 header-only 零依赖嵌入式底盘运动学库（差速/Mecanum/全向 + SpeedLimiter）。
-- 源码在 `inc/`（**瞬时映射唯一入口 `chassis.hpp`**；里程计 `odometry.hpp` 为 opt-in 兄弟头文件，**不进聚合入口**，见 `docs/ODOMETRY_DESIGN.md`）
+- 源码在 `inc/`（**瞬时映射唯一入口 `chassis.hpp`**）
 - 架构/公式：`docs/DESIGN.md`（权威）；开发流程：`docs/DEV_GUIDE.md`
 - **阶段复盘（含错误清单+正确示例+讨论收获）：`docs/log/STAGE1_REVIEW.md`、`docs/log/STAGE2_REVIEW.md`**——新阶段开工/复查代码前必读
 - 实现真相（以代码为准）：`docs/IMPL.md`（改代码必须同步该文档）
@@ -32,16 +36,17 @@ C++17 header-only 零依赖嵌入式底盘运动学库（差速/Mecanum/全向 +
 ## 架构速览（阶段 2 已完成：diff + mecanum + omni + 翻译官）
 
 ```
-inc/contracts.hpp          数据层：Twist（输入契约）、WheelSpeeds（输出契约），POD struct
 inc/kinematics.hpp     数学核心：Kinematics<Derived>（CRTP 能力接口）+ jacobian_apply 翻译官 + k2PI
 inc/drive_diff.hpp     DiffDrive : public Kinematics<DiffDrive>
 inc/drive_mecanum.hpp  MecanumDrive（4×3 J，forward 伪逆）
 inc/drive_omni.hpp     OmniDrive（N×3 J，forward 通用 N 轮伪逆，任意 wn/gamma）
 inc/chassis.hpp        对外聚合入口（瞬时映射唯一入口，用户只 include 这一个）
-inc/odometry.hpp       里程计（规划/实现中）：有状态积分器 + 记录源，opt-in 不进 chassis.hpp
 test/test_kinematics.cpp   测试驱动（断言 + 退出码，三底盘全绿）
 examples/                  使用演示（独立 main）
 ```
+
+> **数据契约不在本组件**：`Twist` / `WheelSpeeds` / `Pose` 在 [`../contracts/`](../contracts/)。
+> 本库的 `inc/` 只有上面 5 个文件。
 
 - 命名语义：**chassis（应用外壳）在上，kinematics（数学）在下**；具体底盘（DiffDrive 等）才是"底盘"，基类是"运动学能力接口"（Comparable 模式）
 - CRTP 派发：基类 const 方法 `static_cast<const Derived*>(this)->xxx_impl()`
@@ -73,17 +78,18 @@ vs `contracts`（表意）中选 contracts。SpeedLimiter 上报机制选方案 
 
 | 日期 | 坑 | 加的规则 |
 |---|---|---|
-| 2026-09-13 | **同类型相邻字段 + 聚合初始化 = 静默错误**：`OdometrySample` 里 `Twist cmd_; Twist twist_;` 顺序写反，初始化按设计顺序写 → 两个值对调，**编译器一声不吭**（同类型按位置匹配）。数学测试全绿，只有 `test_odometry` [9] 抓住 | 新写 struct 时：**相邻同类型字段要么顺序严格对齐契约，要么加一条“谁装进谁”的测试**。C++17 无 designated initializer，编译器帮不了你 |
-| 2026-09-13 | **字段名与契约两边各写各的**：代码里叫 `twist_cmd_`、设计 §5 叫 `cmd_` → 测试编译不过 | **字段名是契约**。契约的源在 `docs/*_DESIGN.md`；测试从契约生成。改契约先改设计，再同步测试与代码 |
-| 2026-09-13 | yaw=0 时 `vy*sin` 与 `vy*cos` 表现相同（0 vs vy），直行测试看不出来 | 写旋转矩阵时，**必须有一条 vy≠0 且 yaw≠0 的用例**（已在 `test_odometry` [1][2] 覆盖） |
 |  |  |  |
+
+> 2026-09-15：原有 3 条全部是 **odometry** 的坑（`OdometrySample` 字段顺序 / 契约字段名 /
+> 旋转矩阵 `vy*sin`），已随该组件迁至 [`../odometry/AGENTS.md`](../odometry/AGENTS.md) §4。
+> 本组件自己的账本是空的 —— **等第一次踩坑**。
 
 ## 测试与验证
 
 - 测试退出码 = 结果（0 = 全过）；浮点断言必须用容差，禁止 `==`（除“零输入冻结”这类**故意**的逐位断言）
 - 模板未实例化 = 未真正编译：任何改动必须用 test 实际调用验证
 - 编译：`ctest --test-dir build --output-on-failure`（已注册）
-  或单编：`g++ -std=c++17 -Wall -Wextra -Werror -Iinc test/test_odometry.cpp`
+  或单编：`g++ -std=c++17 -Wall -Wextra -Werror -Iinc -I../contracts/inc test/test_kinematics.cpp`
 
 ### oracle 规则（金标不许自造）
 
@@ -107,4 +113,4 @@ vs `contracts`（表意）中选 contracts。SpeedLimiter 上报机制选方案 
 3. 容差必须**推导**出来（实测累积误差 × 安全系数），不许手拍 `1e-5`
 
 **金标生成器必须自检**：闭式 vs 数值循环 vs 第三方库三方对比，并在文件里打印结果。
-范例：`test/tools/gen_odometry_golden.py`（五重自检，含“改坏格式能不能被区分”的判别力证明）。
+范例：`../odometry/test/tools/gen_odometry_golden.py`（五重自检，含“改坏格式能不能被区分”的判别力证明）—— 它随 odometry 迁走了，但仍是全仓最好的范例。

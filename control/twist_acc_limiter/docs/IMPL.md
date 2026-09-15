@@ -20,7 +20,9 @@ Twist 空间三通道独立加速度限幅器（斜坡发生器 / slew rate limi
 
 - 在 ARCHITECTURE.md 下行链中占位 ①：`SpeedLimiter (Vx,Vy,ω) → 限幅后 (Vx,Vy,ω)`，是"**先限幅、后分解**"原则的执行者（限幅约束车体三量，不在轮速空间限，保运动学一致性）。
 - 本模块是 kinematics STAGE 3 的实际落地形态，但**独立成模块**（`control/twist_acc_limiter/`，STATIC 库），不进 kinematics 的 `chassis.hpp` 聚合入口。
-- 契约复用：`Twist` 类型 include 自 kinematics 的 `contracts.hpp`（单一事实来源，见 CMake 链接）。
+- 契约复用：`Twist` 类型 include 自 **`contracts`** 库的 `contracts.hpp`（**单一事实来源**）。
+  （2026-09-15：原先写的是“include 自 kinematics 的 contracts.hpp”—— 
+  契约已提为最底层库 `contracts/`，本组件对 kinematics 的依赖已断开。）
 - v1 范围（与 DESIGN.md 一致）：仅每通道加速度斜坡。**不含**速度上限、Jerk、联合约束（属后续/应用层职责）。
 
 ## 2. 实际目录结构

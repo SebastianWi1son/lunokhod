@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-gen_odometry_golden.py — 为 kinematics/inc/odometry.hpp 生成独立金标
+gen_odometry_golden.py — 为 odometry/inc/odometry.hpp 生成独立金标
 ================================================================================
 
-设计红线（按 kinematics/AGENT.md 的 oracle 规则）：
+设计红线（按 AGENTS.md 的 oracle 规则）：
     金标**不许自造**。本文件里没有任何一行"我自己想的期望值"：
 
     - 连续真解   ← SE(2) 指数映射（Lie 群闭式，教科书结论）

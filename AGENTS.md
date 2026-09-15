@@ -61,10 +61,16 @@ lunokhod = 嵌入式底盘控制系统。把 2024 年的 C 语言巡线代码，
 ① 可单独构建      cmake -S <组件目录> -B build && ctest
 ② 可被当子项目引入  add_subdirectory(<组件目录> ...) —— 不污染消费方
 ③ 导出可链接 target target_link_libraries(x PRIVATE <库名>) 就够了
-④ 不反向依赖      依赖方向只能单向：kinematics ← twist_acc_limiter ← …
+④ 不反向依赖      依赖方向只能单向，且汇于最底层：contracts ← 其余全部
+
+  contract（数据层）
+    ├── kinematics（瞬时映射）
+    ├── odometry（有状态积分 + 记录）
+    ├── twist_acc_limiter（限幅）
+    └── wheel（轮控，实际上谁都不依赖）
 ```
 
-具体做法（已在 4 个库里落地，新库照抄）：
+具体做法（已在 5 个库里落地，新库照抄）：
 
 ```cmake
 # ② 构建模式守卫：被引入时只出库
@@ -82,6 +88,11 @@ endif()
 > 连测试一起编）· `twist_acc_limiter` 无条件 `add_subdirectory(kinematics)`
 > （同时引两者就 target 重名）· `foucault_core` 是 INTERFACE 库不含 `mahony.cpp`
 > （外部链接不到符号）。
+>
+> 反面教材（2026-09-15）：`twist_acc_limiter` 原本声明依赖 `kinematics`，
+> 但它其实只要 `Twist` 一个类型 —— 那是一条**语义不实**的边。
+> 它真正该依赖的是 `contracts`。同时 `odometry` 藏在 `kinematics` 里（见 §5.2）。
+> 教训：**依赖声明要写“我需要什么”，不是“谁顺带给了我什么”。**
 
 ### 5.2 库的仓库组织
 
@@ -89,7 +100,7 @@ endif()
 
 为什么 **不**拆成多个仓库：
 
-- 内部只有**一条**依赖边（`twist_acc_limiter → kinematics`），拆仓收益极小
+- 内部依赖边很少且**全部单向汇于 contracts**，拆仓收益极小
 - 开发期契约还在变（`Twist` / `WheelSpeeds` / `Pose`）——
   跨仓改一次契约要开 N 个 PR、N 次发版、再同步 pin，**开发期这个开销远大于收益**
 - 单人项目用不到 polyrepo 的好处（独立发版 / 独立 issue）
@@ -107,6 +118,13 @@ endif()
 - `foucault` = 独立库（姿态解算，与底盘无关，分得开）
 - **固件 = 应用（消费者），另开仓库** —— 它的依赖方向与库相反，
   混进来会让 lunokhod 变成“库 + 一个具体产品”
+
+> 反面教材（2026-09-15）：**odometry 以前住在 `kinematics/inc/` 里** ——
+> 它与运动学正/逆解毫无关系（只依赖 `contracts`），却自带一整套
+> 测试 + 金标生成器 + 工具 + 设计文档 + FAQ（**配套部分比 kinematics 本体还大 10 倍**）。
+> 它当时的归属理由白纸黑字写着“**有状态 / 可选 / 非所有用户都需要**” ——
+> 那正是**该独立成库**的判据，只是当时只在“文件”层面执行了。
+> 教训：**“不并入聚合入口”与“独立成库”是两个问题，后者要单独问一次。**
 
 ## 6. 沟通
 
@@ -138,5 +156,6 @@ endif()
 
 > 规则：**每踩一次坑加一行**。加行的标准是"**不写下来下次还会踩**"。只增不改。
 
-- [`kinematics/AGENTS.md`](kinematics/AGENTS.md) —— 已有 3 条（同类型字段静默错位 / 契约名两边各写各的 / 旋转矩阵需要 vy≠0 且 yaw≠0 的用例）
+- [`kinematics/AGENTS.md`](kinematics/AGENTS.md) —— 账本为空（原来的 3 条都是 odometry 的，已随组件迁走）
+- [`odometry/AGENTS.md`](odometry/AGENTS.md) —— 已有 3 条（同类型字段静默错位 / 契约名两边各写各的 / 旋转矩阵需要 vy≠0 且 yaw≠0 的用例）
 - 其他组件：待建

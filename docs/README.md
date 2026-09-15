@@ -62,7 +62,7 @@ generated: true | false
 | 进度 / 待办 / 挂起事务 | [`TODO.md`](TODO.md) | ✅ |
 | kinematics 设计与公式 | [`../kinematics/docs/DESIGN.md`](../kinematics/docs/DESIGN.md) | ✅（已知漂移，见其头注） |
 | kinematics 理论推导 | [`../kinematics/docs/THEORY.md`](../kinematics/docs/THEORY.md) | ✅ |
-| **odometry 设计**（当前施工） | [`../kinematics/docs/ODOMETRY_DESIGN.md`](../kinematics/docs/ODOMETRY_DESIGN.md) | ✅ v3 定稿 |
+| **odometry 设计**（v3 定稿） | [`../odometry/docs/ODOMETRY_DESIGN.md`](../odometry/docs/ODOMETRY_DESIGN.md) | ✅ |
 | 代码**实际**长什么样 | **代码本身**（`IMPL.md` 只是地图） | ⚠️ 见 §7 |
 | 现在能跑什么、验收数字 | **⚠️ 缺** —— 应建 `STATUS.md` | ❌ 见 `trash/README.md` |
 | AI 协作规则（组件级） | [`../kinematics/AGENTS.md`](../kinematics/AGENTS.md) | ✅ |
@@ -135,7 +135,7 @@ lunokhod/
 ├── README.md                          B 事实：门面（是什么 + 怎么跑）
 ├── AGENTS.md                          B 事实：全局 AI 规则（pi / Claude Code 只认这个约定名，见 §3b）
 ├── LICENSE                            MIT
-├── .github/workflows/ci.yml           CI：三组件编译+测试、金标可复现
+├── .github/workflows/ci.yml           CI：五组件编译+测试、金标可复现
 ├── docs/
 │   ├── README.md                      B 事实 ← 你在这里（文档体系 + 命名规则）
 │   ├── ARCHITECTURE.md                B 事实：全局架构
@@ -144,19 +144,26 @@ lunokhod/
 │   ├── TODO.md                        C 状态：唯一待办源
 │   └── log/
 │       └── REVIEW_RESPONSE.md         A 日志：外部评审查验
-├── kinematics/
+├── contracts/                         最底层库：Twist / WheelSpeeds / Pose（无依赖）
+│   └── inc/contracts.hpp
+├── kinematics/                        库：运动学正/逆解（差速 / 麦轮 / 全向）
 │   ├── AGENTS.md                       B 事实：组件级 AI 协作规则
 │   ├── inc/  test/  examples/  legacy/
 │   └── docs/
 │       ├── DESIGN.md                  B 事实：设计权威
 │       ├── THEORY.md                  B 事实：理论推导与开源参考
-│       ├── ODOMETRY_DESIGN.md         B 事实：专案设计 ← 当前施工
 │       ├── DEV_GUIDE.md               D 施工单：五阶段（1~3 完成）
-│       ├── WORK_ODOMETRY.md           D 施工单：odometry 参考实现 ← 当前施工
 │       ├── IMPL.md                    C 状态：代码地图
 │       └── log/
 │           ├── STAGE1_REVIEW.md       A 日志
 │           └── STAGE2_REVIEW.md       A 日志
+├── odometry/                          库：轮速 → 位姿积分 + 记录源
+│   ├── AGENTS.md                       B 事实：组件级 AI 协作规则
+│   ├── inc/  test/  tools/
+│   └── docs/
+│       ├── ODOMETRY_DESIGN.md         B 事实：专案设计（v3 定稿）
+│       ├── IMPL.md                    C 状态：代码地图
+│       └── log/ODOMETRY_FAQ.md        A 日志：概念答疑录
 ├── control/
 │   ├── wheel/docs/log/
 │   │   └── WHEEL_LESSONS.md           A 日志：踩坑与收获

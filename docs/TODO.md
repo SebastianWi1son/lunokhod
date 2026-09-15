@@ -23,7 +23,7 @@ generated: false
 | 积木 | 位置 | 状态 |
 |---|---|---|
 | 麦轮运动学（正/逆解） | `kinematics/inc/drive_mecanum.hpp` | ✅ 已验收（互逆锚点全绿） |
-| 里程计 | `kinematics/inc/odometry.hpp` | ✅ 已验收（140 断言） |
+| 里程计 | `odometry/inc/odometry.hpp` | ✅ 已验收（140 断言） |
 | Twist 限幅 | `control/twist_acc_limiter/` | ✅ v0.1.0 |
 | 单轮执行（S 曲线 + PID） | `control/wheel/` | ✅ v0.1.0 |
 | 6 轴姿态（Mahony） | `foucault`（独立仓） | ⚠️ PC 侧已验收，**未上过真机、无 IMU 驱动** |
@@ -229,7 +229,7 @@ generated: false
 
 ## 2026-09-13 新增（odometry 开工前的尺子审计所得）
 
-### P15. 手写 `inc/odometry.hpp` ✅ **已完成（2026-09-14）**
+### P15. 手写 `odometry/inc/odometry.hpp` ✅ **已完成（2026-09-14）**
 - **结果**：`test_odometry` **140/140**，`ctest` **4/4 Passed**，`-Wall -Wextra -Werror` 零告警
 - **首次手敲的 3 个坑**（契约字段名不符 / `vy*sin` 写成 `vy*cos` / 同类型字段聚合初始化静默错位）
   **全部被测试抓到** → 规则已入 `kinematics/AGENTS.md` 错误账本
@@ -253,7 +253,7 @@ generated: false
 - 三个组件的 `CMakeLists.txt` 都补了 `enable_testing()` + `add_test`（此前 `ctest` 全是空的）
 
 ### P19. 打滑检测（Slip Detection）⬜ **未立项**（2026-09-14 提出）
-- **现状**：**不在计划里**。只有 `kinematics/docs/ODOMETRY_DESIGN.md` §10「未来拓展」记了一笔。
+- **现状**：**不在计划里**。只有 `odometry/docs/ODOMETRY_DESIGN.md` §10「未来拓展」记了一笔。
   `odometry` 出数据但**不做判定**（红线：判定需要 IMU 当参照，一旦进来就从“底盘无关”变成“绑死 IMU 硬件”）
 - **三个层级**（复杂度 / 可信度递增）：
   - **L0**（只要编码器）：`cmd` 期望 vs `twist` 实际，滑动窗口内比值持续低 → 报“疑似打滑 / 堵转”

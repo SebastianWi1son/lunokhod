@@ -5,9 +5,13 @@ generated: false
 > **类：B 事实** —— **唯一来源**：别处只许链接，不许复制；改决策只改这里。 odometry 设计权威（v3 定稿，O1~O9 + R1~R7 全拍板）。
 > 文档体系与写作规则：../../docs/README.md
 
-# ODOMETRY_DESIGN.md — lunokhod/kinematics 里程计组件设计
+# ODOMETRY_DESIGN.md — lunokhod/odometry 组件设计
 
 > 状态：**v3.2**（2026-09-14）—— O1~O9 + R1~R14 全部拍板；**已落地并验收**
+> **2026-09-15 归属变更**：本组件已从 `kinematics` 库**独立成库** `odometry/`。
+> 下面的 O1 记录了当年的决定（当时选项只有“并入 chassis”与“库内独立文件”两个），
+> 当时的推理（**有状态 / 可选 / 非所有用户都需要**）现在正好也是拆库的理由。
+> 契约 `Twist` / `WheelSpeeds` / `Pose` 同时提为最底层库 `contracts/`。
 > 测试与金标：`test/test_odometry.cpp`（**140 断言**）+ `test/odometry_golden.hpp`（外部 oracle，五重自检）
 > 地位：里程计 = 底盘运动系统的**状态侧**核心组件（kinematics 是纯函数瞬时映射，odometry 是有状态积分器 + 数据记录源）
 > 实现红线：按 `AGENTS.md`，代码由作者手写，AI 只给伪代码/参考实现与复查
@@ -65,7 +69,11 @@ generated: false
 - 路径规划 / 轨迹生成
 - 轮径在线标定（只留 `twist_scale_` 修正口，语义见 §4）
 
-**归属（O1 定案）**：文件 `kinematics/inc/odometry.hpp`，**不并入 `chassis.hpp`**。
+**归属（O1 定案）**：文件 `odometry/inc/odometry.hpp`，**不并入 `chassis.hpp`**。
+（2026-09-15 更新：当时定的是“`kinematics/inc/` 下的独立头文件”；
+ 现在它已是独立库 —— O1 的实质（**与 kinematics 分开**）不变，只是分开得更彻底。）
+（以下是 O1 当年的理由原文，保留不改 —— 注意“作为 opt-in 兄弟头文件单独 `#include`”
+ 是 2026-09-15 之前的形态；现在它是独立库 `odometry/`。）
 理由：kinematics 的对外身份是"纯函数瞬时映射"，`chassis.hpp` 是这一层的唯一入口；odometry 是有状态、可选、非所有用户都需要的组件，作为 opt-in 兄弟头文件单独 `#include`。相应地 `AGENTS.md` 的"用户唯一入口"表述修正为"**瞬时映射唯一入口**"。
 
 ## 3. 数据流
@@ -169,7 +177,7 @@ private:
 
 | # | 决策点 | 定案 | 说明 |
 |---|---|---|---|
-| **O1** | 归属 | ✅ kinematics 库内 `inc/odometry.hpp`，**不进 `chassis.hpp`** | 见 §2；R1 修正了原案"chassis 聚合加入" |
+| **O1** | 归属 | ✅ 独立于 kinematics（当时=库内独立头文件；2026-09-15 提为独立库 `odometry/`），**不进 `chassis.hpp`** | 见 §2；R1 修正了原案"chassis 聚合加入" |
 | **O2** | 输入形态 | ✅ `update(Twist, dt, tick, cmd, ws)` | 底盘无关；`ws` 只做记录字段，不参与积分 |
 | **O3** | Pose 归属 | ✅ 进 `contracts.hpp` | 跨组件输出契约归数据层 |
 | **O4** | yaw 存储 | ✅ 内部连续累计 + 双出口分工 | `yaw_ref()` 连续 / `pose()` wrap，见 §4·R2 |
@@ -242,9 +250,11 @@ private:
 
 ## 9. 实现顺序（建议，供手写参考）
 
-> **测试与金标已就位**（2026-09-13）：`test/test_odometry.cpp`（113 断言）+
-> `test/odometry_golden.hpp`（生成物）。`CMakeLists.txt` 已做条件注册 ——
-> `inc/odometry.hpp` 一出现，重跑 cmake 就会自动挂上 `test_odometry` 并进 `ctest`。
+> **测试与金标已就位**（2026-09-13）：`test/test_odometry.cpp`（113 断言）+ 
+> `test/odometry_golden.hpp`（生成物）。
+> （2026-09-15 更新：当时 `CMakeLists.txt` 里有个 `if(EXISTS inc/odometry.hpp)`
+> 条件注册守卫，等头文件落地才挂 target；头文件落地后它已变成死代码，
+> 拆库时随 `kinematics/CMakeLists.txt` 一并删掉了。现在是无条件注册。）
 > 先做到哪一条，就跑一次看哪些 CHECK 变绿 —— 那是进度条。
 
 1. `contracts.hpp` 加 `Pose`（不改动已有 Twist/WheelSpeeds，零破坏）

@@ -26,13 +26,16 @@ generated: false
 
 ```
 kinematics.hpp                    ← 用户唯一需要 #include 的头文件（聚合入口）
-├── contracts.hpp                ← Twist, WheelSpeeds, Pose, 单位定义
 ├── drive_diff.hpp               ← 差速 2WD/4WD 正/逆运动学
 ├── drive_mecanum.hpp            ← Mecanum 4WD 正/逆运动学
-├── drive_omni.hpp               ← 全向 3/4/N 轮正/逆运动学
-└── odometry.hpp                 ← 轮速 → 位姿积分（半隐式欧拉）
+└── drive_omni.hpp               ← 全向 3/4/N 轮正/逆运动学
 ```
 
+> **契约（`Twist` / `WheelSpeeds` / `Pose`）不在本库** —— 已提为最底层库 `contracts/`
+> （2026-09-15 卫生整理：它不只属 kinematics，odometry 与 twist_acc_limiter 也靠它）。
+> **里程计 `odometry.hpp` 也不在本库** —— 已独立为 `odometry/`（它是有状态、可选、
+> 非所有用户都需要的组件；本库的对外身份是「纯函数瞬时映射」）。
+>
 > **限幅器不在本库**。它已演化为独立模块 `control/twist_acc_limiter/`（STATIC 库）
 > —— 限幅是**应用层策略**，不是运动学数学（行业惯例放上层：ROS 导航栈 acc_lim、
 > 驱动器固件 ramping）。差异清单见 `control/twist_acc_limiter/docs/IMPL.md` 的「与设计文档的差异」。
@@ -158,28 +161,22 @@ kinematics/
 ├── inc/                           ← 头文件（纯 header，无 .cpp）
 │   ├── kinematics.hpp             ← 用户唯一入口（聚合）
 │   ├── chassis.hpp                ← 底盘门面（统一接口）
-│   ├── contracts.hpp              ← 公共类型：Twist / WheelSpeeds / Pose
 │   ├── drive_diff.hpp             ← 差速 2WD/4WD
 │   ├── drive_mecanum.hpp          ← Mecanum 4WD
-│   ├── drive_omni.hpp             ← 全向 3/4/N 轮
-│   └── odometry.hpp               ← 轮速 → 位姿积分
+│   └── drive_omni.hpp             ← 全向 3/4/N 轮
 ├── test/
-│   ├── test_kinematics.cpp        ← 行为锚点测试
-│   ├── test_odometry.cpp          ← 140 断言（外部 oracle 金标）
-│   ├── odometry_golden.hpp        ← 生成物，禁止手改
-│   └── tools/gen_odometry_golden.py  ← 金标生成器（幂等，带五重自检）
+│   └── test_kinematics.cpp        ← 行为锚点测试
 ├── examples/
 │   ├── example.cpp
 │   └── simulation_demo.cpp        ← 全链仿真（逆解 → 轮子 → 正解 → 里程计）
-├── tools/
-│   ├── odometry_demo.cpp          ← 四段场景 → run.csv
-│   └── plot_odometry.py           ← CSV → 四格图
-├── docs/                          ← DESIGN / THEORY / ODOMETRY_DESIGN / DEV_GUIDE / IMPL + log/
+├── docs/                          ← DESIGN / THEORY / DEV_GUIDE / IMPL + log/
 └── legacy/                        ← 2024 年 C 语言巡线实现（只读参考，不许改）
 ```
 
 > **2026-09-14 修正**：本表原先写 `include/kinematics/`、`tests/`、`README.md`（均不存在），
 > 以及已改名 / 已迁出的旧文件名 —— 与实际全不符。见 `IMPL.md` §7 漂移清单。
+> **2026-09-15 修正**：`contracts.hpp` 与 `odometry.hpp` 及其测试/工具/文档已分别迁至
+> `../contracts/` 与 `../odometry/`；本库的 `test/` `tools/` `inc/` 不再含它们。
 
 ## 开发计划
 
@@ -190,7 +187,7 @@ kinematics/
 | 3 | 加速度限幅 → **迁出为独立模块** `control/twist_acc_limiter/` | 已完成（非本库） |
 | 4 | 单元测试 + 文档 + 示例 | 已完成 |
 | 5 | PlatformIO / Arduino 库注册 | 待开始 |
-| 6 | `odometry.hpp` 轮速里程计（当时未规划） | 已完成（2026-09-14） |
+| 6 | `odometry.hpp` 轮速里程计（当时未规划） | 已完成（2026-09-14）→ **2026-09-15 迁出为独立库 `odometry/`** |
 
 ## 旧项目关系
 

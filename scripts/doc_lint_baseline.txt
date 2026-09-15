@@ -12,7 +12,8 @@
 #   R5  kinematics/docs/DESIGN.md  7 处 → §架构 与 §目录结构 两棵假树（旧名 + 旧布局）已按实际重写
 #   R5  kinematics/docs/DEV_GUIDE.md 10 处 → 施工单里的旧名/旧布局按实际改名（23 处）
 #   R5  control/twist_acc_limiter/docs/IMPL.md 1 处 → 漂移清单第 1/6 行已标注「设计文档已回改」
-#   R5  kinematics/docs/ODOMETRY_DESIGN.md 2 处 → 参考库路径写全，自动被 gitignore 规则识别为外部引用
+#   R5  odometry/docs/ODOMETRY_DESIGN.md 2 处 → 参考库路径写全，自动被 gitignore 规则识别为外部引用
+#       （2026-09-15：该文档已从 kinematics/docs/ 迁到 odometry/docs/，路径随之更新）
 #   R5  docs/GIT.md  1 处 → 发布流程里的 CHANGELOG.md 是计划，标 ⬜
 #   R5  docs/README.md 1 处 → 目录树注释里的 CLAUDE.md 与 §3b 重复，去掉（同一句不说两遍）
 #
