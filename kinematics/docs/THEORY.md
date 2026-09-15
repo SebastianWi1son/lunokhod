@@ -263,6 +263,17 @@ ROS2 diff_drive_controller 使用独立的 `SpeedLimiter` 对 `Vx` 和 `ω` 分�
 
 ### 5.2 建议的类层次
 
+> ⚠ **2026-09-15：本节是早期提案，与现状有出入，勿当权威。** 现状以
+> `DESIGN.md`（架构）与 `IMPL.md`（代码地图）为准。差异：
+>
+> | 提案 | 现状 |
+> |---|---|
+> | 基类 `ChassisKinematics<Derived>` | 实际叫 `Kinematics<Derived>`（STAGE2 复盘已改名） |
+> | `Omni3Wheel` / `Omni4Wheel` 两个类 | 实际是**一个通用 `OmniDrive`**（N 轮 + 任意 γ） |
+> | `SwerveDrive` | **不在计划内**，原因是**输出契约太窄**而非「有状态」（见 `DESIGN.md` 说明二） |
+> | `SpeedLimiter` | 已迁出为独立库 `control/twist_acc_limiter/` |
+> | `ChassisController<Kinematics>` | ❌ **从未实现** —— 装配逻辑至今住在消费方，见 `../../docs/TODO.md` P20 |
+
 ```
 ChassisKinematics<Derived>          ← CRTP 基类，定义统一接口
 ├── DifferentialDrive              ← 差速 2/4 轮

@@ -142,6 +142,7 @@ lunokhod/
 │   ├── GIT.md                         B 事实：git 工作流
 │   ├── ALGO_LIB_DECISION.md           B 事实：算法库策略（专案）
 │   ├── TODO.md                        C 状态：唯一待办源
+│   ├── WORK_CHASSIS_LOOP.md           D 施工单：装配层 ← 当前施工
 │   └── log/
 │       └── REVIEW_RESPONSE.md         A 日志：外部评审查验
 ├── contracts/                         最底层库：Twist / WheelSpeeds / Pose（无依赖）
@@ -173,6 +174,12 @@ lunokhod/
 ```
 
 **规则**：`log/` 目录永远和它所属的文档住在一起（组件级文档配组件级 `log/`），不要把所有日志堆到根。
+
+**规则：跨仓引用不许写成 markdown 链接。**
+CI 只 clone 本仓一个仓库（`ci_local.py` 也是在临时目录里跑），
+所以指向兄弟仓的链接**在所有自动化环境里都必然断**。
+跨仓的东西用**裸路径**（`~/Develop/Workspace/fw_poc/`）或**裸名字**（`foucault`）提一下，
+**别用方括号加圆括号的 markdown 链接语法** —— 门禁 R4 会红，而它红得对。
 
 ---
 
