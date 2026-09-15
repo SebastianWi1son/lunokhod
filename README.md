@@ -9,6 +9,16 @@ generated: false
 - 每个组件：**零依赖**、能直接拖进 STM32 工程、带行为锚点测试
 - 源码由作者手写；测试由 AI 编写（出题人 / 答题人分工，见 [AGENTS.md](AGENTS.md)）
 
+## 接手先读（零上下文入口）
+
+| 顺序 | 读什么 | 为什么 |
+|---|---|---|
+| 1 | [`docs/log/HANDOFF.md`](docs/log/HANDOFF.md) | **交接快照**：当前状态、工具用法、下一步任务、已知坑 |
+| 2 | [`AGENTS.md`](AGENTS.md) | 铁律（角色分工 / oracle 规则 / 库的职责边界） |
+| 3 | [`docs/README.md`](docs/README.md) | 文档体系与六条硬规则 |
+| 4 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 上下行链、汇合点 |
+| 5 | [`docs/WORK_CHASSIS_LOOP.md`](docs/WORK_CHASSIS_LOOP.md) | **当前施工单**（装配层） |
+
 ## 这是什么
 
 lunokhod 是**底盘控制系统的库集合** —— 几个互相独立、可单独取用的 C++17 库，

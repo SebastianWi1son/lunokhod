@@ -69,6 +69,7 @@ generated: true | false
 | AI 协作规则（**全局级**） | [`AGENTS.md`](../AGENTS.md) | ✅ |
 | 踩过的坑 / 阶段复盘 | `<组件>/docs/log/*.md` | ✅ |
 | 外部评审查验 | [`log/REVIEW_RESPONSE.md`](log/REVIEW_RESPONSE.md) | ✅ |
+| **交接 / 冻结快照**（带日期，不代表当前状态） | [`log/HANDOFF.md`](log/HANDOFF.md) | ✅ |
 | 施工单（怎么改代码） | `<组件>/docs/*_WORK.md`、`DEV_GUIDE*.md`（**临时物**） | ⚠️ 用完即弃 |
 
 ---
@@ -144,7 +145,8 @@ lunokhod/
 │   ├── TODO.md                        C 状态：唯一待办源
 │   ├── WORK_CHASSIS_LOOP.md           D 施工单：装配层 ← 当前施工
 │   └── log/
-│       └── REVIEW_RESPONSE.md         A 日志：外部评审查验
+│       ├── REVIEW_RESPONSE.md         A 日志：外部评审查验
+│       └── HANDOFF.md                 A 日志：交接快照（★ 新 agent 先读这个）
 ├── contracts/                         最底层库：Twist / WheelSpeeds / Pose（无依赖）
 │   └── inc/contracts.hpp
 ├── kinematics/                        库：运动学正/逆解（差速 / 麦轮 / 全向）

@@ -7,7 +7,7 @@
 class OmniDrive : public Kinematics<OmniDrive> {
 public:
     OmniDrive(uint8_t wn, float cr, float gamma, float wr)
-        :wn_(wn), cr_(cr), gamma_(gamma), wr_(wr){}
+        :wn_(wn), cr_(cr), gamma_(gamma), wr_(wr) {}
 
     WheelSpeeds inverse_impl(const Twist& t_cmd) const {
         float J[6][3];
