@@ -64,6 +64,7 @@ jobs:
           - odometry
           - control/wheel
           - control/twist_acc_limiter
+          - chassis_loop
     steps:
       - uses: actions/checkout@v4
       - run: cmake -S "${{ matrix.component }}" -B build -DCMAKE_BUILD_TYPE=Debug
@@ -76,6 +77,7 @@ jobs:
             odometry)                  want=1 ;;
             control/wheel)             want=2 ;;
             control/twist_acc_limiter) want=5 ;;   # 自身 2 + 引导进来的 kinematics 3
+            chassis_loop)              want=1 ;;   # 装配层 7 组测试合成 1 个可执行文件
             *) echo "❌ 矩阵里新增了组件但忘了在这里登记期望条数"; exit 1 ;;
           esac
           # 先数条数再跑 —— 这样 contracts（want=0）不会因 “无测试时 ctest 退非零” 而假红，
@@ -120,15 +122,19 @@ jobs:
           add_subdirectory(${LUNOKHOD_ROOT}/odometry ext/odometry)
           add_subdirectory(${LUNOKHOD_ROOT}/control/wheel ext/wheel)
           add_subdirectory(${LUNOKHOD_ROOT}/control/twist_acc_limiter ext/tal)
+          add_subdirectory(${LUNOKHOD_ROOT}/chassis_loop ext/chassis_loop)
           add_executable(app main.cpp)
           target_compile_options(app PRIVATE -Wall -Wextra -Werror)
-          target_link_libraries(app PRIVATE contracts kinematics odometry wheel twist_acc_limiter)
+          target_link_libraries(app PRIVATE contracts kinematics odometry wheel twist_acc_limiter chassis_loop)
           EOF
           cat > /tmp/consumer/main.cpp <<'EOF'
           #include "chassis.hpp"
+          #include "chassis_loop.hpp"
           #include "odometry.hpp"
           #include "twist_acc_limiter.hpp"
           #include "wheel.hpp"
+          static float fake_measure(uint8_t wheel_id, float dt) { (void)wheel_id; (void)dt; return 0.0f; }
+          static void  fake_pwm(uint8_t wheel_id, int16_t pwm) { (void)wheel_id; (void)pwm; }
           int main() {
               MecanumDrive    chassis(0.10f, 0.12f, 0.03f);
               TwistAccLimiter limiter(1.5f, 1.5f, 4.0f);
@@ -136,7 +142,12 @@ jobs:
               (void)chassis.inverse_kinematics(Twist{0.5f, 0.0f, 0.0f});
               (void)limiter.limit(Twist{0.5f, 0.0f, 0.0f}, 0.001f);
               odom.update(Twist{0.5f, 0.0f, 0.0f}, 0.001f, 1u);
-              return 0;
+              // 装配层：被消费时能真用起来
+              ChassisLoopConfig cfg;
+              ChassisLoop<MecanumDrive> loop(cfg, chassis, fake_measure, fake_pwm);
+              loop.set_cmd(Twist{0.3f, 0.0f, 0.0f});
+              loop.tick(0.001f, 2u);
+              return (loop.wheel_target(0) > 0.0f) ? 0 : 1;
           }
           EOF
       - name: 配置 + 编译

@@ -348,3 +348,22 @@ void observe_heading(float heading_rad, float trust = 1.0f);
 - 然后读 §7 的施工单，问用户「② 您手写还是我先出参考实现？」
   （先例：`WORK_ODOMETRY.md` 那次是 **AI 出参考实现 + 测试、用户手敲 `inc/`**）
 - **动任何 `inc/` `src/` `examples/` 之前先问**（铁律 §2.1）
+
+---
+
+## 追加（2026-09-16）：装配层施工单已移入组件目录
+
+- `docs/WORK_CHASSIS_LOOP.md` → **`chassis_loop/docs/WORK_CHASSIS_LOOP.md`**
+  （理由：`chassis_loop` 是根级独立库，**组件独享的文档跟组件走** ——
+  与 `kinematics/docs/DEV_GUIDE.md`、`odometry/docs/ODOMETRY_DESIGN.md` 同类）
+- **⚠ 所以 §7 里那行施工单链接已失效** —— 请按上面的新路径找。
+  A 类日志**只增不改**，所以没回头改那一行；门禁的 R4（链接必须存在）
+  已按 R5 的**同一条理由**对 log 类豁免：文件搬走后，旧日志里的路径就是历史快照。
+- §7 的内容本身**仍然有效**（范围 / 验收锚点 / oracle 三条都没变）。
+  新增的只有接口层决策 **D1~D8**（含 **D6：底盘实例从外面注入**），见施工单 §12。
+- 顺带：`TODO.md` **P16 已关闭**（`Odometry::reset(Pose)` 早就有，属过期条目）；
+  新增 **P22**（装配层 `reset()` 语义待设计）。
+- **二次追加（同日）**：装配层的**长期事实已拆出为 `chassis_loop/docs/DESIGN.md`**
+  （契约 / 决策 D1~D9 / 职责与「五个不做」/ 执行顺序 / 只读口 / 已知边界 F1~F3 / 验收锚点）。
+  `chassis_loop/docs/WORK_CHASSIS_LOOP.md` 现在只剩「参考实现 + CMakeLists + 测试 + 判别力审计 + 手敲顺序」，
+  验收后进 `trash/`。**上面 §7 说的"含完整接口契约"以 `DESIGN.md` 为准。**

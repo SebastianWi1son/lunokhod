@@ -17,7 +17,7 @@ generated: false
 | 2 | [`AGENTS.md`](AGENTS.md) | 铁律（角色分工 / oracle 规则 / 库的职责边界） |
 | 3 | [`docs/README.md`](docs/README.md) | 文档体系与六条硬规则 |
 | 4 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 上下行链、汇合点 |
-| 5 | [`docs/WORK_CHASSIS_LOOP.md`](docs/WORK_CHASSIS_LOOP.md) | **当前施工单**（装配层） |
+| 5 | [`chassis_loop/docs/DESIGN.md`](chassis_loop/docs/DESIGN.md) | **装配层**的契约与决策（要做底盘编排就读它；施工单在同目录） |
 
 ## 这是什么
 
@@ -32,11 +32,22 @@ lunokhod 是**底盘控制系统的库集合** —— 几个互相独立、可�
 
 | 库 | 路径 | CMake target | 依赖 | 用途 |
 |---|---|---|---|---|
-| **kinematics** | [`kinematics/`](kinematics/) | `kinematics` | — | 平面底盘运动学（差速 / Mecanum / 全向）+ 里程计 |
+| **contracts** | [`contracts/`](contracts/) | `contracts` | — | 数据契约：`Twist` / `WheelSpeeds` / `Pose`（**最底层**） |
+| **kinematics** | [`kinematics/`](kinematics/) | `kinematics` | `contracts` | 平面底盘运动学正/逆解（差速 / Mecanum / 全向 N 轮） |
+| **odometry** | [`odometry/`](odometry/) | `odometry` | `contracts` | 轮速 → 位姿积分 + 逐拍记录（`SampleSink`） |
 | **wheel** | [`control/wheel/`](control/wheel/) | `wheel` | — | 单轮执行层：S 曲线规划 → 速度环 PID → PWM |
-| **twist_acc_limiter** | [`control/twist_acc_limiter/`](control/twist_acc_limiter/) | `twist_acc_limiter` | `kinematics` | Twist 空间三通道加速度限幅（斜坡发生器） |
+| **twist_acc_limiter** | [`control/twist_acc_limiter/`](control/twist_acc_limiter/) | `twist_acc_limiter` | `contracts` | Twist 空间三通道加速度限幅（斜坡发生器） |
+| **chassis_loop** | [`chassis_loop/`](chassis_loop/) | `chassis_loop` | 上面全部 | **装配层**：限幅 → 逆解 → N×轮控 → 正解 → 里程计（拥有唯一心跳） |
 
-**依赖方向只能单向**：`kinematics ← twist_acc_limiter`。新增依赖前先看 [`docs/TODO.md`](docs/TODO.md) 的固件主线。
+**依赖方向只能单向，且全部汇于最底层** `contracts`：
+
+```
+contracts ← kinematics           contracts ← odometry
+contracts ← twist_acc_limiter    wheel（谁都不依赖）
+        ⬑______ chassis_loop（在上面全部之上）______⬏
+```
+
+新增依赖前先看 [`docs/TODO.md`](docs/TODO.md) 的固件主线。
 
 全局架构（下行命令链 + 上行感知链 + 汇合点）见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 

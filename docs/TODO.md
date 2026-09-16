@@ -171,8 +171,12 @@ generated: false
 - **优先级**：🟢 低
 
 ### P6. ARCHITECTURE.md 术语同步 ⬜ 部分完成
-- **内容**：SpeedLimiter → TwistAccLimiter、三级愿景 → v1 范围 + Wheel 承接 S 曲线
-- **优先级**：🟢 低（多数已由 agent 生成 docs 覆盖，待一致性核对）
+- **内容**：① 改名 `SpeedLimiter` → `TwistAccLimiter`
+  ② 三级愿景 → v1 范围 + Wheel 承接 S 曲线
+  ③ **§2「下行链」表里缺行**：现在只有 Command Interface / SpeedLimiter / Inverse Kinematics / Odometry，
+  缺 `contracts` / `wheel` / `chassis_loop`（装配层），且 `Odometry（可选）` 已独立成库
+- **优先级**：🟢 低（多数已由 agent 生成 docs 覆盖，待一致性核对）；
+  ③ 建议与 `chassis_loop` 落地那一批一起做（见 [`DESIGN.md`](../chassis_loop/docs/DESIGN.md) §11 + 施工单 §5 第 ⑤ 步）
 
 ## 重构线
 
@@ -227,6 +231,16 @@ generated: false
 - 2026-09-14：**odometry 落地**（P15 关闭，140/140）；文档命名统一（7 个改名）；错误账本建立；
   AGENTS.md 改名（从此能被自动加载）；LICENSE / CI / 根 README / 根 AGENTS 补全；P13、P17、P18 关闭；
   新增 P19（打滑检测，未立项）
+- 2026-09-16：**装配层接口定案**（D1~D9，`chassis_loop/docs/DESIGN.md` §8）→ 参考实现与测试落地
+  （施工单 §1，12 个变体全变红）；**组件文档隔离**（施工单移入组件 `docs/`，
+  长期事实拆出 `DESIGN.md`）；名字维持 `chassis_loop`（**更正了否掉 `ChassisController` 的旧理由**）；
+  **关闭 P16**（`reset(Pose)` 早已实现，属过期条目）；**新增 P22**（装配层 `reset()` 语义待设计）；
+  修正根 `README.md` 的库清单（拆库后一直没同步：缺 `contracts`/`odometry`、依赖边写的是已删除的那条）；
+  门禁 R4（链接存在）**改为对 log 类豁免**（与 R5 同一条理由）
+- 2026-09-16（续）：**装配层落地并验收通过** —— `inc/chassis_loop.hpp`（INTERFACE 库，84 行）+ 根聚合器挂载；
+  四档编译零告警、聚合 `ctest` **9/9**、13 个变异全部变红、被消费零泄漏；
+  `chassis_loop/docs/IMPL.md`（代码地图）+ 三处组件清单（README / AGENTS §5.1 / ARCHITECTURE §2）已同步；
+  新增 **P23**（`wheel` 的 `-Wconversion` 隐式转换，验收时撞到）
 
 ---
 
@@ -238,11 +252,14 @@ generated: false
   **全部被测试抓到** → 规则已入 `kinematics/AGENTS.md` 错误账本
 - **收尾**：施工单 `WORK_ODOMETRY.md` 已进 `trash/`；代码地图已追加到 `kinematics/docs/IMPL.md` §9
 
-### P16. `Odometry` 缺初始位姿入口 ⬜ 待拍板（R12）
-- **内容**：`reset()` 只清零，没有 `reset(const Pose&)` / `set_pose()`。
+### P16. `Odometry` 缺初始位姿入口 ✅ **已完成（2026-09-16 核实）**
+- **结果**：**早已实现** —— `odometry/inc/odometry.hpp` 有 `reset()` 与 `reset(const Pose&)` 两个重载，
+  `odometry/test/test_odometry.cpp` 有对应测试（「初始位姿入口 `reset(Pose)`」）
+- **本条为何一直挂着**：2026-09-13 记录时确实没有；2026-09-14 odometry 落地时补上了，但本条没同步划掉
+  —— 教训：**代码落地时，要回头看旧待办里有哪些已经被顺手做掉了**
+- **原始内容（存档）**：`reset()` 只清零，没有 `reset(const Pose&)` / `set_pose()`；
   设计 §8-#5 “初始 yaw=π/2” 无法直接表达（测试已用“先纯转再走”绕开）
-- **权衡**：加 `reset(const Pose&)`（一行，代价低）vs v1 坚持“恒从原点起”（但上电时就地开里程计就做不到了）
-- **优先级**：🟡 中（一行代码，但影响接口契约）
+- **优先级**：✅ 关闭
 
 ### P17. 两处 2D 位姿积分的积分顺序不一致 ✅ **已统一（2026-09-14）**
 - **结论**：`examples/simulation_demo.cpp` 已改为**半隐式欧拉**（先积分 yaw，再用新 yaw 旋转位移），与 odometry R6 同源
@@ -370,7 +387,15 @@ FK(measured_wheel_speeds).wz  −  gyro_z
   `pose()` · `yaw_ref()` · `twist()`（FK 输出）· `cmd()` · `wheel_speed(i)` · `wheel_target(i)`
 - **验收（可机器判）**：把 `~/Develop/Workspace/KND_Trial/firmware/` 里的 `app.cpp` 换成用装配层，
   **仿真输出逐位不变**（`pose=(0.3425, 0.1085) yaw_odo=0.2574 …`）
-- **待拍板**：名字 / 位置 / 要不要预留修正输入
+- **已定案**（2026-09-15 名字/位置；2026-09-16 接口 D1~D8 全定案）：
+  名字 `chassis_loop` / 位置仓库根级 / 不预留 `set_correction`，接口层 D1~D9 全定案
+  —— 见 [`DESIGN.md`](../chassis_loop/docs/DESIGN.md) §8
+- **验收结论（2026-09-16）**：✅ **已通过**（含验收锚点第 ⑥ 步 —— KND_Trial 仿真输出 **md5 逐位相同**）。
+  完整记录见 [`chassis_loop/docs/log/ACCEPTANCE.md`](../chassis_loop/docs/log/ACCEPTANCE.md)；
+  代码地图见 [`chassis_loop/docs/IMPL.md`](../chassis_loop/docs/IMPL.md)。
+- **遗留**：① **P24**（轮子容量 < 契约容量 → `OmniDrive` wn=6 越界，真 UB，待拍板修法）；
+  ② 施工单已进 `trash/`（契约与决策已入 `chassis_loop/docs/DESIGN.md`）；③ P22（`reset()` 语义）
+- **遗留**：`reset()` 语义未定 → 见 P22
 - **优先级**：🔴 **高（下一任务）**
 
 ### P21. Swerve Drive 可行性复核 ⬜ **记入待办**（2026-09-15 提出）
@@ -396,3 +421,41 @@ FK(measured_wheel_speeds).wz  −  gyro_z
 
   → **Swerve 是「契约太窄」，Ackermann 是「抽象不成立」。**
 - **优先级**：🟢 低（先把装配层和固件做完）
+
+### P22. 装配层的 `reset()` 语义 ⬜ **待设计**（2026-09-16 提出）
+
+- **来源**：装配层 [`DESIGN.md`](../chassis_loop/docs/DESIGN.md) §8.2 的 D7 定案「v1 不做」，但留下了一个洞。
+- **洞在哪**：各积木都有清零入口（`TwistAccLimiter::reset()` · `PID::reset()` ·
+  `SmoothPlanner::reset()` · `Wheel::stop()` · `Odometry::reset(Pose)`），
+  但它们都是 `ChassisLoop` 的 **private** 成员 → 调用方**一个都够不着**（连 `Wheel::stop()` 也够不着）。
+- **为什么没现在做**：急停/复位路径还没设计，光「要不要顺带 `stop()` 那 4 个 `Wheel`」就是两难 ——
+  写 PWM 0 会碰**未用到的轮子**（与决策 3 冲突）；只停前 `n` 个又不行，
+  因为 `reset()` 很可能在第一次 `tick()` **之前**被调，那时 `target_ws_.count_` 还是 0。
+- **注意**：它**不是**热切换配置（换参数需要 `set_config()`，那个不做 —— 同 `DESIGN.md` §8.1 的判据）。
+- **下一步**：等固件的急停 / 失效保护（缺口 G7）立项时一并定；先定「谁在什么条件下调它」。
+- **优先级**：🟡 中（不阻塞装配层落地）
+
+### P23. `wheel` 在 `-Wconversion` 下有一条隐式转换 ⬜ 待决策（2026-09-16 提出）
+
+- **来源**：验收 `chassis_loop` 时跑「严格档」撞到的 —— **不是那一批代码的问题**。
+- **现象**：`control/wheel/src/wheel.cpp` 的 `set_pwm_(motor_id_, out_pwm)`：`float` → `int16_t` 隐式转换，
+  开 `-Wconversion` 时 `-Werror=float-conversion` 直接挂。
+- **性质**：**功能上是有意的** —— PWM 接口就是整数，且 `out_pwm` 已被 `PIDConfig::limit_out_` 夹住（默认 1000），
+  不会溢出。问题只在「有意」看不出来（隐式截断）。
+- **选项**：① 显式 `static_cast<int16_t>`（一行，表达意图）；② 加饱和钳位再 cast；③ 不管
+- **影响面**：现状**不影响 CI**（各组件自测只用 `-Wall -Wextra -Werror`），但谁想开 `-Wconversion` 编整仓就会卡住。
+- **优先级**：🟢 低（一行的事，属「跨组件一致性」）
+
+### P24. 装配层的轮子容量 < 契约容量 → 越界 ⬜ **待修（真 UB）**（2026-09-16 提出）
+
+- **内容**：契约 `WheelSpeeds.values_[6]` 允许 **6** 轮，`ChassisLoop` 却只持有 `Wheel* wheels_[4]`。
+  `tick()` 按 `count_` 循环 `wheels_[i]` → `ChassisLoop<OmniDrive>`（wn = 6）**越界写**。
+- **证据（实测）**：UBSan `index 4 out of bounds for type 'Wheel *[4]'` + ASan `SEGV`（在 `Wheel::set_cmd`）→ 段错误。
+- **为什么没被测出来**：7 组测试只用 `MecanumDrive`(4) 与 `DiffDrive`(2)，`OmniDrive` **一次都没构造**。
+- **影响面**：现有消费方（KND_Trial 麦轮 / `fw_poc`）都是 4 轮 → 触发不到；但 `OmniDrive` 本来就支持 N 轮、就在本仓。
+- **选项**：① **容量对齐契约**（`wheels_[6]`；2 轮车多几个死对象，改动最小）
+  ② 加守卫（编译期/运行期断言，明确「本组件只支持 ≤ 4」）
+  ③ 容量做模板参数 `ChassisLoop<Chassis, N>`（零浪费，但要 `index_sequence` 构造 N 个 `Wheel`）
+  ④ 真 N 泛化（给 `Wheel` 加默认构造 / `std::array` + 工厂）
+- **附带**：测试要补「边界 N」用例（N = 契约上限、N = 1）—— 否则「支持 N」只是口头声明。
+- **优先级**：🟡 中（不阻塞现有消费方，但是真 UB，且出问题的类型就在本仓）

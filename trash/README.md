@@ -14,6 +14,7 @@ generated: false
 
 | 路径 | 它到底是什么 | 为什么在这里 | 判定后怎么处理 |
 |---|---|---|---|
+| `WORK_CHASSIS_LOOP.md`（2026-09-16） | **D 施工单** —— chassis_loop（装配层）的参考实现 | 已验收：四档编译零告警 · 7 组测试 · 聚合 9/9 · 13 变异全红 · **KND_Trial 仿真输出 md5 逐位相同**；代码本体才是源 | **删**（历史在 git；契约与决策已入 `chassis_loop/docs/DESIGN.md`，验收记录入 `chassis_loop/docs/log/ACCEPTANCE.md`） |
 | `WORK_ODOMETRY.md`（2026-09-14） | **D 施工单** —— odometry 的参考实现（带 D1~D10 决策点标注） | 已验收（`test_odometry` **116/116**），施工单使命结束；代码本体才是源 | **删**（历史在 git；验收记录已入 `kinematics/docs/IMPL.md` §9 + `docs/TODO.md` P15） |
 | `WHEEL_BUILD_GUIDE.md`（348 行） | **D 施工单** —— control/wheel 的构建指导 | wheel 已完成并发布 v0.1.0，施工单使命结束；教训已沉淀进 `control/wheel/docs/log/WHEEL_LESSONS.md` | ① 删（历史在 git）；或② 抽出“设计决策”并入 wheel 的 B 类文档 |
 | `AHRS_BUILD_GUIDE.md`（107 行） | **D 施工单（草案 v0，2026-08-22，"明天拍板"）** | AHRS 姿态解算已由**独立项目 `foucault`** 承接（见 `kinematics/docs/ODOMETRY_DESIGN.md` §11） | ① 删；或② 改成指向 foucault 的一行指针 |

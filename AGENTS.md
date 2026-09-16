@@ -70,10 +70,11 @@ lunokhod = 嵌入式底盘控制系统。把 2024 年的 C 语言巡线代码，
     ├── kinematics（瞬时映射）
     ├── odometry（有状态积分 + 记录）
     ├── twist_acc_limiter（限幅）
-    └── wheel（轮控，实际上谁都不依赖）
+    ├── wheel（轮控，实际上谁都不依赖）
+    └── chassis_loop（装配层：编排上面全部，在**最上层**）
 ```
 
-具体做法（已在 5 个库里落地，新库照抄）：
+具体做法（已在 6 个库里落地，新库照抄）：
 
 ```cmake
 # ② 构建模式守卫：被引入时只出库
@@ -179,6 +180,9 @@ endif()
   加了新 link/新依赖时，另跑 `--clean`（用 git HEAD 新建 clone，查“忘了提交”）。
 - 任何 git 操作前先 `git status`；**`git add` 不会清空已有暂存区** ——
   曾经的坑：`git mv` 是立即入暂存区的，随后 `git add <几个文件>` 会把重命名一并带上。
+- **commit message 双段式**（2026-09-16 定）：第一段是**用户的一句话**
+  （他自己判断进度用，别改他的措辞）；第二段是 **agent 的完整变更清单**
+  （供下一个 agent / 用户接手，不必翻 diff）。格式与分节词见 [`docs/GIT.md`](docs/GIT.md)。
 - 文件移动用 `git mv`。
 - 分支与发布流程见 [`docs/GIT.md`](docs/GIT.md)。
 
@@ -188,4 +192,5 @@ endif()
 
 - [`kinematics/AGENTS.md`](kinematics/AGENTS.md) —— 账本为空（原来的 3 条都是 odometry 的，已随组件迁走）
 - [`odometry/AGENTS.md`](odometry/AGENTS.md) —— 已有 3 条（同类型字段静默错位 / 契约名两边各写各的 / 旋转矩阵需要 vy≠0 且 yaw≠0 的用例）
+- [`chassis_loop/AGENTS.md`](chassis_loop/AGENTS.md) —— 已有 4 条（契约名漂移 / 内部名跨家族 / 容量不一致越界 / 只测自己用得到的 N）
 - 其他组件：待建

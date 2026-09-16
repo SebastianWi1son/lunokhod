@@ -143,12 +143,19 @@ lunokhod/
 │   ├── GIT.md                         B 事实：git 工作流
 │   ├── ALGO_LIB_DECISION.md           B 事实：算法库策略（专案）
 │   ├── TODO.md                        C 状态：唯一待办源
-│   ├── WORK_CHASSIS_LOOP.md           D 施工单：装配层 ← 当前施工
 │   └── log/
 │       ├── REVIEW_RESPONSE.md         A 日志：外部评审查验
 │       └── HANDOFF.md                 A 日志：交接快照（★ 新 agent 先读这个）
 ├── contracts/                         最底层库：Twist / WheelSpeeds / Pose（无依赖）
 │   └── inc/contracts.hpp
+├── chassis_loop/                      库：装配层（限幅 → 逆解 → N×Wheel → 正解 → 里程计）
+│   ├── AGENTS.md                      B 事实：组件级规则 + 错误账本（4 条）
+│   ├── inc/chassis_loop.hpp           `ChassisLoop<Chassis>`（INTERFACE 库，无 .cpp）
+│   ├── docs/
+│   │   ├── DESIGN.md                  B 事实：契约 / 决策 D1~D9（设计权威）
+│   │   ├── IMPL.md                    C 状态：代码地图
+│   │   └── log/ACCEPTANCE.md          A 日志：首批落地与验收（含金标逐位比对）
+│   └── test/test_chassis_loop.cpp     测试（AI 写）
 ├── kinematics/                        库：运动学正/逆解（差速 / 麦轮 / 全向）
 │   ├── AGENTS.md                       B 事实：组件级 AI 协作规则
 │   ├── inc/  test/  examples/  legacy/

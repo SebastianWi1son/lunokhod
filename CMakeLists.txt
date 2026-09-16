@@ -44,9 +44,11 @@ add_subdirectory(kinematics)
 add_subdirectory(odometry)
 add_subdirectory(control/wheel)
 add_subdirectory(control/twist_acc_limiter)
+# 装配层在最上层：它编排其余全部，所以必须放最后
+add_subdirectory(chassis_loop)
 
 message(STATUS "")
 message(STATUS "lunokhod 开发构建 (LUNOKHOD_DEV_BUILD=${LUNOKHOD_DEV_BUILD})：")
-message(STATUS "  库     contracts / kinematics / odometry / wheel / twist_acc_limiter")
+message(STATUS "  库     contracts / kinematics / odometry / wheel / twist_acc_limiter / chassis_loop")
 message(STATUS "  依赖   contracts ← 其余全部（单向，无环）")
 message(STATUS "  全部测试  ctest --test-dir <build> --output-on-failure")

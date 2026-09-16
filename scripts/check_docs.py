@@ -16,6 +16,9 @@ check_docs.py — 把「文档规矩」变成机器门禁
   · 行号规则（R3）只作用于 fact/status/work，**log 类豁免** ——
     A 类日志「只增不改」，里面的行号是【当时那一行的快照】，是正确记录，不是错误。
     硬要它无行号，等于要求历史记录不许带时间戳。
+    同一条理由适用于所有【路径类】检查（R4 链接 / R5 引用）：
+    文件被搬走后，旧日志里的路径必然失效 —— 那是历史，不是违规。
+    （代价：log 里的链接断了门禁不再报警；所以搬文件时要【追加】一行更正，见 R4 之后的说明。）
   · 存量违规走 `scripts/doc_lint_baseline.txt`（债务清单）而不是豁免规则 ——
     数字是明示的、可数的、只减不增的；新增违规立刻变红。
 """
@@ -324,7 +327,9 @@ def check(paths, root):
                     errors.append(("R3", rel, f"出现行号引用 `{m.group(0)}`（§6④ 禁止行号）"))
 
         # ── R4 本地链接必须存在（§7）──
-        for m in MD_LINK.finditer(body):
+        #   与 R5 同一条理由：log 类只增不改，里面的路径是【当时的快照】，
+        #   文件被搬走之后它们必然失效 —— 那是历史记录，不是错误。
+        for m in (MD_LINK.finditer(body) if cls != "log" else ()):
             target = m.group(1).strip()
             if target.startswith(("http://", "https://", "mailto:", "#", "data:")):
                 continue

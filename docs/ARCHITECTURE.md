@@ -76,6 +76,10 @@ generated: false
 | SpeedLimiter | cmd | 限幅 cmd | 三量分别限速度/加速度/Jerk | 已设计 |
 | Inverse Kinematics | 限幅 cmd | 轮速 | 差速/Mecanum/全向 N 轮；**先限幅后分解** | 已设计 |
 | Odometry（可选） | 轮速 | (x,y,θ) | 正运动学 + 积分 | 已设计 |
+| **Chassis Loop（装配层）** | 限幅后 cmd · `dt` · `now` | N 轮命令 + 位姿 | **按固定顺序编排上面四块**，并把同一份时间基分发下去 | 已设计 |
+
+> **2026-09-16**：装配层已落成独立库 **`chassis_loop`**（设计 [`../chassis_loop/docs/DESIGN.md`](../chassis_loop/docs/DESIGN.md)）。
+> 它**不生产数据**，只搬运与排列 —— 算法全部在被它调用的库里。
 
 **为什么先限幅后分解**（THEORY §3.3 的既有结论）：先分解再限幅会让底盘运动扭曲
 （限幅器约束的是车体三量，不是单轮）。这条原则决定了汇合点必须在三量层面（§4）。
