@@ -32,7 +32,9 @@ public:
           w1_(1, cfg.planner_, cfg.pid_, measure_speed, set_pwm),
           w2_(2, cfg.planner_, cfg.pid_, measure_speed, set_pwm),
           w3_(3, cfg.planner_, cfg.pid_, measure_speed, set_pwm),
-          wheels_{ &w0_, &w1_, &w2_, &w3_ } {}
+          w4_(4, cfg.planner_, cfg.pid_, measure_speed, set_pwm),
+          w5_(5, cfg.planner_, cfg.pid_, measure_speed, set_pwm),
+          wheels_{ &w0_, &w1_, &w2_, &w3_, &w4_, &w5_ } {}
 
     // ----- upstream interface -----
     void set_cmd(const Twist& cmd) { t_cmd_in_ = cmd; }
@@ -44,6 +46,7 @@ public:
         t_cmd_final_ = limiter_.limit(t_cmd_in_, dt).out_;
         // --- inverse to ws ---
         ws_target_ = chassis_.inverse_kinematics(t_cmd_final_);
+        // 容量 = 契约容量（WheelSpeeds.values_[6]）；活跃数由底盘说了算
         const uint8_t wn = ws_target_.count_;
         for (uint8_t i = wn; i < 6; ++i) { ws_target_.values_[i] = 0.0f; }
         // --- push down & actuator ---
@@ -75,8 +78,8 @@ private:
     TwistAccLimiter limiter_;
     Odometry odom_;
 
-    Wheel w0_, w1_, w2_, w3_;
-    Wheel* wheels_[4];
+    Wheel w0_, w1_, w2_, w3_, w4_, w5_;
+    Wheel* wheels_[6];
 
     Twist t_cmd_in_{ 0.0f, 0.0f, 0.0f };            ///< upstream cmd
     Twist t_cmd_final_{ 0.0f, 0.0f, 0.0f };         ///< actual twist push down

@@ -36,9 +36,9 @@ kinematics.hpp                    ← 用户唯一需要 #include 的头文件�
 > **里程计 `odometry.hpp` 也不在本库** —— 已独立为 `odometry/`（它是有状态、可选、
 > 非所有用户都需要的组件；本库的对外身份是「纯函数瞬时映射」）。
 >
-> **限幅器不在本库**。它已演化为独立模块 `control/twist_acc_limiter/`（STATIC 库）
+> **限幅器不在本库**。它已演化为独立模块 `command/twist_acc_limiter/`（STATIC 库）
 > —— 限幅是**应用层策略**，不是运动学数学（行业惯例放上层：ROS 导航栈 acc_lim、
-> 驱动器固件 ramping）。差异清单见 `control/twist_acc_limiter/docs/IMPL.md` 的「与设计文档的差异」。
+> 驱动器固件 ramping）。差异清单见 `command/twist_acc_limiter/docs/IMPL.md` 的「与设计文档的差异」。
 
 ## 统一接口
 
@@ -228,7 +228,7 @@ kinematics/
 |------|------|:--:|
 | 1 | `contracts.hpp` + `drive_diff.hpp`（当时叫 differential_drive） | 已完成 |
 | 2 | `drive_mecanum.hpp` + `drive_omni.hpp` | 已完成 |
-| 3 | 加速度限幅 → **迁出为独立模块** `control/twist_acc_limiter/` | 已完成（非本库） |
+| 3 | 加速度限幅 → **迁出为独立模块** `command/twist_acc_limiter/` | 已完成（非本库） |
 | 4 | 单元测试 + 文档 + 示例 | 已完成 |
 | 5 | PlatformIO / Arduino 库注册 | 待开始 |
 | 6 | `odometry.hpp` 轮速里程计（当时未规划） | 已完成（2026-09-14）→ **2026-09-15 迁出为独立库 `odometry/`** |

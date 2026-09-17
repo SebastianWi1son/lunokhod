@@ -367,3 +367,36 @@ void observe_heading(float heading_rad, float trust = 1.0f);
   （契约 / 决策 D1~D9 / 职责与「五个不做」/ 执行顺序 / 只读口 / 已知边界 F1~F3 / 验收锚点）。
   `chassis_loop/docs/WORK_CHASSIS_LOOP.md` 现在只剩「参考实现 + CMakeLists + 测试 + 判别力审计 + 手敲顺序」，
   验收后进 `trash/`。**上面 §7 说的"含完整接口契约"以 `DESIGN.md` 为准。**
+- **三次追加（2026-09-16，同日）**：装配层**容量 4 → 6**（对齐契约 `WheelSpeeds.values_[6]`，
+  `chassis_loop/docs/DESIGN.md` §8.2 新增 **D10**）。原因是一处真 UB：
+  `ChassisLoop<OmniDrive>`（wn=6）在 `wheels_[i]` 上越界 → UBSan `index 4 out of bounds` + ASan `SEGV`。
+  **P24 已关闭**；同时补了**边界 N 测试**（三轮 / 六轮），并验证「容量退回 4 → 新用例在 ASan 下必红」。
+  已复验：四档编译零告警 · 聚合 9/9 · 9 个变异全红 · **KND_Trial 仿真输出仍逐位相同**（容量变更对 4 轮无影响）。
+  > 教训（已入 `chassis_loop/AGENTS.md` 账本）：**"支持 N" 的组件必须测边界 N**；
+  > **装配层容量必须 ≥ 它接受的契约容量**。
+- **四次追加（2026-09-16，同日）**：本轮是**概念澄清 + 需求归口**，**无代码改动**。
+  - **`SetPwmFn` 定位定案**：它**不是「碰了硬件」，而是「命名绑定了实现」**。
+    `SetPwmFn` 是**注入的回调** —— 库连「这是 PWM」都不知道（对面可能是 TIM 寄存器 / PC 模型 / 日志文件）。
+    **硬件的边界是「调用 vs 被调用」，不是「数字 vs 硬件」**；真·PWM 实现（`hal::set_pwm`）叫得对，
+    错的只是把它写进**库的接口**（库的接口属于所有调用方）。
+    → 改名方案 **`SetEffortFn`**，对称性最强：`MeasureSpeedFn`→`speed_cur_`→`get_speed()`
+    ↔ `SetEffortFn`→`effort_`→`effort()`。
+  - **PID 算法需求归口到仓外**：`~/Develop/Workspace/pid/`（PID 对比归档 + 优化考量清单，**未纳管 git**）。
+    本轮新增条目 **D3（饱和/限幅状态上报）** 已入其 `docs/optimization_considerations.md`
+    （改前已备份到 `/tmp/pid_backup_<ts>/`）。⚠ 落地要**两份活副本同改**：
+    `cyclotron/foc/inc/foc/algo/pid.hpp`（该仓声明「以此为准」）+ `lunokhod/control/wheel/inc/pid.hpp`
+    —— 两者 `pid.cpp` **逐字节相同**，只差 namespace / include。
+  - **TODO 新增**：**P25**（装配层接出 `LimitResult` 的三个饱和标志 —— 现在被 `.out_` 顺手扔了）·
+    **P26**（轮级 `effort()` 暴露 + `SetPwmFn`→`SetEffortFn`，建议与 P11/P23 一起进 **wheel v0.2.0**）。
+    **P3 扩大**为跨仓同源副本 · **P11 增「pid 仓 D3 硬前置」身份**（`limit_out_=0` 会让饱和标志恒 true）·
+    **P19 补 §九** · **P23 并入 P26**。
+  - **P19 的两个实质进展**（原先是「被采数据卡住」）：
+    ① **能分类打滑/堵转的最小数据集 = 三元组** `wheel_target(i)` / `wheel_speed(i)` / `wheel_effort(i)`
+    —— 缺第三个就分不开（**堵转与空转在转速上是同一个观测**，只有努力度分得开）；
+    ② **采数据零改动可做**：`SampleSink` 在 `odom_.update()` 内**同步调用**，而 `odom_.update()` 是
+    `tick()` 的**最后一步** → **在 sink 回调里读装配层只读口，拿到的就是同一拍的值**（不需缓冲 / 时间戳对齐）。
+  - **另一条实质结论**：**残差的第一消费者是「标定」，不是「打滑」** ——
+    标定误差 = **长期一致的系统性残差**，打滑 = **瞬时残差**；共用采样，**判定方法完全不同**（见 P19 §九.5）。
+  - ⚠ **门禁坑复现（写文档时踩到）**：把一个仓外路径写进反引号
+    （`~/Develop/Workspace/pid/docs/xxx.md`），R5 把其尾段 `docs/xxx.md` 当成**本仓相对路径**报红。
+    **解**：跨仓引用用**裸名字**（`optimization_considerations.md`），路径单独写 —— 与本文档 §6「跨仓引用」同一条规矩。

@@ -62,8 +62,8 @@ jobs:
           - contracts
           - kinematics
           - odometry
-          - control/wheel
-          - control/twist_acc_limiter
+          - actuator/wheel
+          - command/twist_acc_limiter
           - chassis_loop
     steps:
       - uses: actions/checkout@v4
@@ -75,8 +75,8 @@ jobs:
             contracts)                 want=0 ;;   # 纯类型库，无测试
             kinematics)                want=3 ;;
             odometry)                  want=1 ;;
-            control/wheel)             want=2 ;;
-            control/twist_acc_limiter) want=5 ;;   # 自身 2 + 引导进来的 kinematics 3
+            actuator/wheel)             want=2 ;;
+            command/twist_acc_limiter) want=5 ;;   # 自身 2 + 引导进来的 kinematics 3
             chassis_loop)              want=1 ;;   # 装配层 7 组测试合成 1 个可执行文件
             *) echo "❌ 矩阵里新增了组件但忘了在这里登记期望条数"; exit 1 ;;
           esac
@@ -120,8 +120,8 @@ jobs:
           add_subdirectory(${LUNOKHOD_ROOT}/contracts ext/contracts)
           add_subdirectory(${LUNOKHOD_ROOT}/kinematics ext/kinematics)
           add_subdirectory(${LUNOKHOD_ROOT}/odometry ext/odometry)
-          add_subdirectory(${LUNOKHOD_ROOT}/control/wheel ext/wheel)
-          add_subdirectory(${LUNOKHOD_ROOT}/control/twist_acc_limiter ext/tal)
+          add_subdirectory(${LUNOKHOD_ROOT}/actuator/wheel ext/wheel)
+          add_subdirectory(${LUNOKHOD_ROOT}/command/twist_acc_limiter ext/tal)
           add_subdirectory(${LUNOKHOD_ROOT}/chassis_loop ext/chassis_loop)
           add_executable(app main.cpp)
           target_compile_options(app PRIVATE -Wall -Wextra -Werror)

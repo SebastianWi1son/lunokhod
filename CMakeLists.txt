@@ -17,8 +17,8 @@ project(lunokhod LANGUAGES CXX)
 #           add_subdirectory(<lunokhod>/contracts                    ${CMAKE_BINARY_DIR}/_ext/contracts)
 #           add_subdirectory(<lunokhod>/kinematics                   ${CMAKE_BINARY_DIR}/_ext/kinematics)
 #           add_subdirectory(<lunokhod>/odometry                     ${CMAKE_BINARY_DIR}/_ext/odometry)
-#           add_subdirectory(<lunokhod>/control/wheel                ${CMAKE_BINARY_DIR}/_ext/wheel)
-#           add_subdirectory(<lunokhod>/control/twist_acc_limiter    ${CMAKE_BINARY_DIR}/_ext/tal)
+#           add_subdirectory(<lunokhod>/actuator/wheel                ${CMAKE_BINARY_DIR}/_ext/wheel)
+#           add_subdirectory(<lunokhod>/command/twist_acc_limiter    ${CMAKE_BINARY_DIR}/_ext/tal)
 #       组件会自动进入"库模式"：只出库，不出测试/示例/工具。
 #       参考实现：~/Develop/Workspace/fw_poc/CMakeLists.txt
 #
@@ -42,8 +42,8 @@ enable_testing()
 add_subdirectory(contracts)
 add_subdirectory(kinematics)
 add_subdirectory(odometry)
-add_subdirectory(control/wheel)
-add_subdirectory(control/twist_acc_limiter)
+add_subdirectory(actuator/wheel)
+add_subdirectory(command/twist_acc_limiter)
 # 装配层在最上层：它编排其余全部，所以必须放最后
 add_subdirectory(chassis_loop)
 

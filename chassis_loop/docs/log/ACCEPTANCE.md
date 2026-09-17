@@ -64,3 +64,24 @@ KND_Trial **未纳管 git** → 改前手工备份在 `/tmp/knd_backup/`（`CMak
 改动：`firmware/CMakeLists.txt` 加 `knd_add_dep(chassis_loop …)` + 链进 `knd_app`；
 `app.hpp` 的手写链（`chassis_` / `limiter_` / `odom_` / 4×`Wheel` / `target_ws_` / `tick_`）全部删掉，
 换成 `ChassisLoop<MecanumDrive> loop_`；`app.cpp::tick` 变成 `loop_.tick(dt, hal::tick())` + 姿态。
+
+---
+
+## 6. 同日修正：容量 4 → 6（P24）
+
+§4 记的那个越界当天就修了：**容量对齐契约 = 6**（`w0_..w5_` + `Wheel* wheels_[6]`），
+决策记入 `../DESIGN.md` §8.2 **D10**，"未选模板容量 / 真 N 泛化"的理由也在那儿。
+
+**修完的复验**（全部实测）：
+
+| 项 | 结果 |
+|---|---|
+| 原始越界复现用例（`ChassisLoop<OmniDrive>` wn=6，ASan+UBSan） | **exit 0**（修前：`SEGV`） |
+| 四档编译 | 零告警；消毒档 `ALL PASS` |
+| 测试 | 8 组 / 57 条断言（新增**边界 N**：三轮 wn=3、六轮 wn=6） |
+| 判别力 | 9 个变异仍全红；**另加一条"把容量退回 4" → 新用例在 ASan 下必然变红** |
+| 聚合 | 9/9 |
+| **KND_Trial 逐位回归** | **仍逐位相同**（容量变更对 4 轮无影响，实测确认） |
+
+> 顺带：这条新用例第一版**自己写错了** —— 测试的假 IO `g_meas[4]` 装不下 id=5，
+> 于是 ASan 先抓了测试自己的越界。**尺子也会越界**：容量改动要连测试夹具一起对齐。

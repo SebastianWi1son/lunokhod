@@ -19,7 +19,7 @@ generated: false
 
 C++17 header-only 零依赖嵌入式底盘运动学库：输入本体系 `Twist (vx, vy, wz)`，输出各轮角速度 `WheelSpeeds`，支持差速 / Mecanum / 全向三类线性底盘。编译期模板（CRTP）派发，无虚函数、零堆、零异常，仅依赖 `<cstdint>` / `<cmath>`。
 
-注意：设计文档中规划的 `speed_limiter.hpp`（STAGE 3）**不在本模块内**——它已演化为独立模块 `control/twist_acc_limiter/`（STATIC 库，见该模块 docs）。
+注意：设计文档中规划的 `speed_limiter.hpp`（STAGE 3）**不在本模块内**——它已演化为独立模块 `command/twist_acc_limiter/`（STATIC 库，见该模块 docs）。
 
 ## 2. 实际目录结构
 
@@ -167,7 +167,7 @@ wz = Σuᵢ / (N·R)
 | 1 | 目录 `include/kinematics/`、`tests/` | 实际 `inc/`、`test/` |
 | 2 | 文件名 `differential_drive.hpp` 等 | 实际 `drive_diff.hpp` / `drive_mecanum.hpp` / `drive_omni.hpp` |
 | 3 | 基类名 `Chassis<Derived>`，`chassis.hpp` 是基座 | 实际基类叫 `Kinematics<Derived>`（STAGE2 复盘已修正命名，DESIGN.md 未回改）；`chassis.hpp` 是聚合入口 |
-| 4 | STAGE 3 在 kinematics 内做 header-only `speed_limiter.hpp` | 实际落地为 `control/twist_acc_limiter/`（.hpp+.cpp 的 STATIC 库），且不进 chassis.hpp |
+| 4 | STAGE 3 在 kinematics 内做 header-only `speed_limiter.hpp` | 实际落地为 `command/twist_acc_limiter/`（.hpp+.cpp 的 STATIC 库），且不进 chassis.hpp |
 | 5 | Omni 逆运动学公式 sin/−cos/−R | 代码为 −sin/+cos/+R（§5.3） |
 | 6 | Omni forward 计划"3 轮特例先行，N>3 用一般公式" | 已实现通用 N 轮伪逆（含 γ）；3 轮 γ=0 是其中 N=3 的化简 |
 | 7 | 统一接口 `inverse<Chassis>(cmd)` 自由函数 | 实际为成员调用 `chassis.inverse_kinematics(cmd)`（DEV_GUIDE 备忘 4 已承认此修正） |

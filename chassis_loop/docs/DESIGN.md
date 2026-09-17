@@ -96,14 +96,16 @@ odom_.update(twist_meas_, dt, now, cmd_out_, &meas);   // ⑥ 谁吃 twist_meas_
 
 ```
 lunokhod/
-├── contracts/         ← 最底层
-├── chassis_loop/      ← 本组件（在 control/ 之外 —— 它编排的不只是控制）
-├── kinematics/
-├── odometry/
-└── control/
-    ├── twist_acc_limiter/
-    └── wheel/
+├── contracts/         ← 数据契约（贯穿所有层）
+├── command/           ← 指令整形层：twist_acc_limiter（车体 Twist 空间，在逆解之上）
+├── kinematics/        ← 坐标变换：Twist ↔ 轮速
+├── odometry/          ← 积分与记录
+├── actuator/          ← 执行器层：wheel（目标转速 → effort，在逆解之下）
+└── chassis_loop/      ← 本组件（编排层，最上层）
 ```
+
+> 目录名 = 分层地图（2026-09-16 整理：原 `control/` 拆成 `command/` + `actuator/`）。
+> 分层依据与“每层吃什么吐什么”见 [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md) 的分层表。
 
 依赖方向（**单向、无环**，本组件在**最上层**）：
 
@@ -117,16 +119,15 @@ contracts ← wheel      ←┘
 ## 5. 对外接口（契约）
 
 ```cpp
-// inc/chassis_loop.hpp
+// inc/chassis_loop.hpp —— 编排层：只认「执行器组」契约（§5.2）
 
-#include "chassis.hpp"            // kinematics：底盘类型（模板参数）
 #include "contracts.hpp"           // Twist / WheelSpeeds / Pose
 #include "odometry.hpp"
 #include "twist_acc_limiter.hpp"
-#include "wheel.hpp"
 
 // 参数聚合（常量与参数不许散落在函数体里）
-// 注意：这里【没有】底盘几何 —— 几何属于 Chassis（§8.2 D6）
+// 注意：这里【没有】底盘几何 —— 几何属于底盘，而底盘在执行器组里（§8.2 D6 / D11）
+//       也【没有】PID / planner —— 那是执行器组的参数（§5.2）
 //       也【没有】control_dt_ —— 时间基唯一来源是 tick(dt, now)（§8.2 D4）
 struct ChassisLoopConfig {
     float acc_vx_ = 1.5f;            // m/s²，Twist 空间加速度限幅
@@ -139,17 +140,11 @@ struct ChassisLoopConfig {
     float twist_scale_ = 1.0f;       // 里程计标定系数（硬件属性）
 };
 
-template <typename Chassis>
+template <typename ActuatorSet>      // 执行器组（§5.2）；本轮唯一实现是 wheel_set.hpp 的 WheelSet
 class ChassisLoop {
 public:
-    using MeasureSpeedFn = float (*)(uint8_t wheel_id, float dt);
-    using SetPwmFn       = void  (*)(uint8_t wheel_id, int16_t pwm);
-
-    // 底盘【从外面注入】—— 几何是底盘自己的事（§8.2 D6）
-    ChassisLoop(const ChassisLoopConfig& cfg,
-                const Chassis&          chassis,
-                MeasureSpeedFn          measure_speed,
-                SetPwmFn                set_pwm);
+    // 执行器组【从外面注入】—— 底盘几何 / IO / PID 都在它里面
+    ChassisLoop(const ChassisLoopConfig& cfg, const ActuatorSet& actuators);
 
     void set_cmd(const Twist& cmd);              // 上游：本拍想跑的车体速度
     void set_sink(SampleSink sink, void* ctx = nullptr);   // §8.2 D8
@@ -169,9 +164,29 @@ public:
 
 **库类型 = INTERFACE**（全模板 + POD 配置，**没有 `.cpp`**，见 §9 F2）。
 
-**轮数（决策 §8.1）**：内部构造 4 个 `Wheel`（`w0_..w3_` + `Wheel* wheels_[4]`），
-`tick()` 里按 `target_ws_.count_` 决定**实际用前几个**（diff=2 / omni=3 / mec=4）。
+**轮数（决策 §8.1 + §8.2 D10）**：`WheelSet` 内部构造 **6** 个 `Wheel`
+（`std::array<Wheel, 6>`，**容量 = 契约容量** `WheelSpeeds.values_[6]`），
+`apply()` 里按设定值的 `count_` 决定**实际用前几个**（diff=2 / omni=3 / mec=4）。
 没被用到的 `Wheel` 永远不 `update()` → 不会写 PWM、不会调 `MeasureSpeedFn` ✓。
+
+### 5.2 执行器组接缝（`ActuatorSet` 的契约）
+
+**它是什么**：车体 `Twist` 与「N 个执行器」之间的那一格。抽出来的理由见 §8.2 **D11**：
+FOC（自带速度环时）与 Swerve 换的正是这一格，装配层的其余部分一个字都不用动。
+
+| 契约 | 语义 |
+|---|---|
+| `WheelSpeeds inverse(const Twist&) const` | 车体 → 执行器目标（**未用到的槽堵 0**，见 §9 F1） |
+| `void apply(const WheelSpeeds&, float dt)` | 下发 + 执行（只动前 `count_` 个） |
+| `WheelSpeeds measure() const` | 读回实测（零初始化，未用到槽留 0） |
+| `Twist forward(const WheelSpeeds&) const` | 实测 → 车体 |
+
+**v1 的边界（有意为之，别提前泛化）**：`Setpoints` / `Feedbacks` 都固定是 `WheelSpeeds`
+（因为 `odometry` 的记录契约就是 `WheelSpeeds`）。Swerve 的「角度 + 速度」两量契约
+要一起改 `WheelSpeeds` 与 `odometry`，**留到 Swerve 立项时再定**（`../../docs/TODO.md` P26）。
+**它现在只有一个实现**（`WheelSet`），但**不是装饰参数** —— 反例 `foucault::Estimator<EKF>`：
+那个模板参数从没被用；这个是真的被调用（4 个方法），且有第 9 组「接缝一致性」测试用
+一个**假执行器组** `StubSet` 证明可替换。
 
 ### 5.1 三个 `Twist` 的名字（2026-09-16 定案）
 
@@ -232,8 +247,8 @@ public:
 | # | 决策 | 结论 | 一句话理由 |
 |---|---|---|---|
 | **名字** | **`chassis_loop` / `ChassisLoop`** | ✅ | ⚠ **2026-09-16 更正否掉 `ChassisController` 的理由**：原写「名不副实 —— 它还含里程计」**站不住**（ros2_control 的 `diff_drive_controller` / `mecanum_drive_controller` 也含里程计）。真理由是**库内 `controller` 一词已被控制律占用**（`PID` / `SmoothPlanner` / `TwistAccLimiter` / `Wheel`），叫 `ChassisController` 会让人以为 PID 在这个库里 —— 而它一行控制律都没有。"loop" = 闭环 + 时间基，也是嵌入式最普遍的叫法（`loop()` / `Run()` / `update()` / AUTOSAR Runnable / PX4 WorkItem）
-| **位置** | **仓库根级** | ✅ | 它编排的不只是 `control/`，放在 `control/` 下会误导 |
-| **轮数** | **构造 4 个 `Wheel`，按 `WheelSpeeds.count_` 实际使用** | ✅ | 差速（2 轮）只用到前 2 个，不用改代码。N 泛化要 `index_sequence` 技巧 —— 与「古法编程」节奏不合，留到真需要时 |
+| **位置** | **仓库根级** | ✅ | 它编排的不只是执行器（`actuator/`），还包括指令整形与坐标变换 —— 放在任何一层里都会误导 |
+| **轮数** | **构造 6 个 `Wheel`，按 `WheelSpeeds.count_` 实际使用**（原为 4，2026-09-16 由 D10 修正为 6） | ✅ | 差速（2 轮）只用到前 2 个，不用改代码。N 泛化要 `index_sequence` 技巧 —— 与「古法编程」节奏不合，留到真需要时 |
 | **`set_correction(δcmd)`** | **不做** | ✅ | 「为没设计出来的东西预留接口 = 猜」 |
 
 ### 8.2 接口层 D1~D9（2026-09-16）
@@ -249,6 +264,8 @@ public:
 | **D7** | 要不要 `reset()` | **v1 不做** —— 理由见下 |
 | **D8** | 要不要转发 `set_sink` | **要** —— 一行，把 odometry 已有的逐拍记录（含 `tick_`）开给调用方 |
 | **D9** | 要不要拆成两个角色（调度者 + 底盘链） | **v1 不拆** —— 见 §3「何时该拆」 |
+| **D10** | 轮子**容量**取几 | **6 = 契约容量**（原为 4）—— 见下 |
+| **D11** | 要不要把「N×执行器」抽成可替换积木 | **要** —— 接缝 = 执行器组（§5.2）；FOC / Swerve 各写一个实现，装配层不动 |
 
 **D6 为什么是 (a)**：三种底盘构造签名不同 —— `MecanumDrive(lx, ly, r)` ·
 `DiffDrive(wb, r)`（`wb` 是**全**轮距）· `OmniDrive(wn, cr, gamma, wr)`。
@@ -273,6 +290,23 @@ DiffDrive::DiffDrive(const float&, const float&, const float&)`）。
 
 **D9 为什么 v1 不拆**：见 §3（拆出来的"调度者"是空的：没有状态、没有算法，只有一个调用序列）。
 
+**D10 为什么容量必须是 6**（2026-09-16 修，原为 4）：
+
+契约 `WheelSpeeds.values_[6]` 允许 **6** 轮（`OmniDrive` 的 `wn` 就是 1~6），
+而装配层只持有 `Wheel* wheels_[4]` → `tick()` 按 `count_` 循环必然越界。**实测证据**：
+
+```
+ChassisLoop<OmniDrive>(wn = 6) → UBSan: index 4 out of bounds for type 'Wheel *[4]'
+                               → ASan : SEGV in Wheel::set_cmd
+```
+
+**规则**：**装配层的容量必须 ≥ 它接受的契约容量** —— 两个容量不一致时，
+"支持 N" 就成了一句口头声明。同一类病还有 `TODO.md` P12（`OmniDrive` 的 `wn>6` 越界写）。
+**配套**：测试必须覆盖**边界 N**（N = 契约上限 6、N = 3）—— 否则 4 轮与 2 轮的用例永远暴露不了。
+
+> 未选的两个方案：**容量做模板参数** `ChassisLoop<Chassis, N>`（零浪费，但要 `index_sequence`
+> 工厂）与**真 N 泛化**（要给 `Wheel` 加默认构造，破坏"构造即注入 IO"）。都留到有人真计较 RAM 时再说。
+
 ## 9. 已知边界与发现
 
 **F1 —— `kinematics::jacobian_apply()` 只填前 `count_` 个槽，尾巴是 indeterminate**
@@ -284,7 +318,7 @@ WheelSpeeds out_ws;          // ← 没有零初始化
 `MecanumDrive::forward_impl()` 却**无条件**读 `values_[0..3]`。当前三种底盘的 `count_`
 与读取范围一致，所以还不构成 UB；但「坏数据静默外流」违反 `../../AGENTS.md` 铁律 5：
 P19 采 CSV 时，没用到的那几槽就是脏数据。
-**处置**：装配层在逆解后**堵一次**（`for (i = n; i < 6; ++i) target_ws_.values_[i] = 0.0f;`），
+**处置**：`WheelSet::inverse()` 在逆解后**堵一次**（`for (i = sp.count_; i < 6; ++i) sp.values_[i] = 0.0f;`），
 **不动 kinematics 源码**（铁律 §2.1）。
 
 **F2 —— 库类型是 INTERFACE，没有 ⬜ `src/chassis_loop.cpp`**
@@ -334,4 +368,4 @@ ChassisLoop(const ChassisLoopConfig& cfg, ...)
 装配层是**接线层**，**不能拿它自己的输出算期望值**。可用的是
 **金标**（另一份代码算出来的仿真输出）· **手算锚点**（几何 + 阶跃命令 → 有理数）·
 **性质**（互逆 / `|Δtwist| ≤ acc·dt` / 只读口自洽）+ 两条装配层独有的不变式
-（**调用顺序**、**`tick` 不发明时间基**）。
+（**调用顺序**、**`tick` 不发明时间基**）+ **边界 N**（三轮 / 六轮，D10 的回归）。

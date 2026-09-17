@@ -13,7 +13,7 @@ generated: false
 | 路径 | 是什么 |
 |---|---|
 | `inc/chassis_loop.hpp` | **全部代码**（84 行）：`ChassisLoopConfig` + `ChassisLoop<Chassis>` |
-| `test/test_chassis_loop.cpp` | 7 组 / 50 条断言（AI 写，出题人） |
+| `test/test_chassis_loop.cpp` | 8 组 / 57 条断言（AI 写，出题人） |
 | `CMakeLists.txt` | `chassis_loop` = **INTERFACE** 库（**没有 `.cpp`** —— 全模板，见 DESIGN.md §9 F2） |
 | `docs/DESIGN.md` | B 事实：契约 / 决策 D1~D9 / 边界 |
 | `docs/log/ACCEPTANCE.md` | A 日志：首批落地与验收记录 |
@@ -36,8 +36,8 @@ generated: false
 | `chassis_` | `Chassis` | 构造时从外面注入的那一份 |
 | `limiter_` | `TwistAccLimiter` | |
 | `odom_` | `Odometry` | |
-| `w0_` `w1_` `w2_` `w3_` | `Wheel` | **永远构造 4 个**（决策：轮数） |
-| `wheels_` | `Wheel*[4]` | 指向上面四个；`tick()` 里只用前 `count_` 个 |
+| `w0_` … `w5_` | `Wheel` | **永远构造 6 个**（容量 = 契约容量，DESIGN.md §8.2 **D10**） |
+| `wheels_` | `Wheel*[6]` | 指向上面六个；`tick()` 里只用前 `count_` 个 |
 | `t_cmd_in_` | `Twist` | ① 上游要求（**限幅前**） |
 | `t_cmd_final_` | `Twist` | ② 限幅后、**真正下发**的那一份 |
 | `ws_target_` | `WheelSpeeds` | ③ 逆解输出的**单轮目标**（尾巴恒为 0，见 DESIGN.md §9 F1） |
@@ -74,7 +74,8 @@ generated: false
 
 ## 6. 测试
 
-`test_chassis_loop.cpp` 7 组：逆解手算锚点 · 限幅性质与到位拍数 · `cmd()`=限幅后且限幅先于逆解 ·
+`test_chassis_loop.cpp` 8 组：逆解手算锚点 · 限幅性质与到位拍数 · `cmd()`=限幅后且限幅先于逆解 ·
+**边界 N（三轮 / 六轮）** ·
 执行顺序与未用轮不被触碰 · `dt`/`now` 穿透 · 互逆往返 · 目标真的下发到轮子。
 oracle 与容差推导见施工单 §3；判别力审计（13 个变异全部变红）见施工单 §4。
 

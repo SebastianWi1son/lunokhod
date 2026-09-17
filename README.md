@@ -35,8 +35,8 @@ lunokhod 是**底盘控制系统的库集合** —— 几个互相独立、可�
 | **contracts** | [`contracts/`](contracts/) | `contracts` | — | 数据契约：`Twist` / `WheelSpeeds` / `Pose`（**最底层**） |
 | **kinematics** | [`kinematics/`](kinematics/) | `kinematics` | `contracts` | 平面底盘运动学正/逆解（差速 / Mecanum / 全向 N 轮） |
 | **odometry** | [`odometry/`](odometry/) | `odometry` | `contracts` | 轮速 → 位姿积分 + 逐拍记录（`SampleSink`） |
-| **wheel** | [`control/wheel/`](control/wheel/) | `wheel` | — | 单轮执行层：S 曲线规划 → 速度环 PID → PWM |
-| **twist_acc_limiter** | [`control/twist_acc_limiter/`](control/twist_acc_limiter/) | `twist_acc_limiter` | `contracts` | Twist 空间三通道加速度限幅（斜坡发生器） |
+| **wheel** | [`actuator/wheel/`](actuator/wheel/) | `wheel` | — | 单轮执行层：S 曲线规划 → 速度环 PID → PWM |
+| **twist_acc_limiter** | [`command/twist_acc_limiter/`](command/twist_acc_limiter/) | `twist_acc_limiter` | `contracts` | Twist 空间三通道加速度限幅（斜坡发生器） |
 | **chassis_loop** | [`chassis_loop/`](chassis_loop/) | `chassis_loop` | 上面全部 | **装配层**：限幅 → 逆解 → N×轮控 → 正解 → 里程计（拥有唯一心跳） |
 
 **依赖方向只能单向，且全部汇于最底层** `contracts`：

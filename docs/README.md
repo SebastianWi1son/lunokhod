@@ -154,6 +154,7 @@ lunokhod/
 │   ├── docs/
 │   │   ├── DESIGN.md                  B 事实：契约 / 决策 D1~D9（设计权威）
 │   │   ├── IMPL.md                    C 状态：代码地图
+│   │   ├── WORK_SEAM.md               D 施工单：执行器组接缝 ← 当前施工
 │   │   └── log/ACCEPTANCE.md          A 日志：首批落地与验收（含金标逐位比对）
 │   └── test/test_chassis_loop.cpp     测试（AI 写）
 ├── kinematics/                        库：运动学正/逆解（差速 / 麦轮 / 全向）
@@ -174,13 +175,20 @@ lunokhod/
 │       ├── ODOMETRY_DESIGN.md         B 事实：专案设计（v3 定稿）
 │       ├── IMPL.md                    C 状态：代码地图
 │       └── log/ODOMETRY_FAQ.md        A 日志：概念答疑录
-├── control/
-│   ├── wheel/docs/log/
-│   │   └── WHEEL_LESSONS.md           A 日志：踩坑与收获
+├── command/                            指令整形层（车体 Twist 空间，在逆解之上）
 │   └── twist_acc_limiter/docs/
 │       └── IMPL.md                    C 状态：代码地图
-└── trash/                             待裁决：判定后整目录删除
+├── actuator/                           执行器层（目标转速 → effort，在逆解之下）
+│   └── wheel/docs/log/
+│       └── WHEEL_LESSONS.md           A 日志：踩坑与收获
+└── trash/                              待裁决：判定后整目录删除
 ```
+
+**目录名 = 分层地图**（2026-09-16 整理）：`contracts`（数据）→ `command`（指令整形）→
+`kinematics`（坐标变换）→ `actuator`（执行器）→ `chassis_loop`（编排）。
+层与层之间“吃什么吐什么”见 [`ARCHITECTURE.md`](ARCHITECTURE.md) 的分层表。
+**用 `actuator` 而不是 `drive`**：`kinematics/inc/` 已有 `drive_diff.hpp` / `drive_mecanum.hpp`
+（那里的 `drive` = 底盘类型），再用 `drive/` 就是一词两义。
 
 **规则**：`log/` 目录永远和它所属的文档住在一起（组件级文档配组件级 `log/`），不要把所有日志堆到根。
 

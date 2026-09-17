@@ -29,11 +29,11 @@ struct Ev { EvKind kind; uint8_t id; float dt; int16_t pwm; };
 static const int MAX_EV = 512;
 static Ev    g_ev[MAX_EV];
 static int    g_ev_n = 0;
-static float  g_meas[4] = {0.0f, 0.0f, 0.0f, 0.0f};   // 由测试【喂】进去的实测轮速
+static float  g_meas[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};   // 由测试【喂】进去的实测轮速（容量 = 契约容量 6）
 static float  g_last_dt = -1.0f;
 
 static void ev_reset() { g_ev_n = 0; g_last_dt = -1.0f; }
-static void zero_meas() { for (int i = 0; i < 4; ++i) { g_meas[i] = 0.0f; } }
+static void zero_meas() { for (int i = 0; i < 6; ++i) { g_meas[i] = 0.0f; } }
 
 static float fake_measure(uint8_t id, float dt) {
     if (g_ev_n < MAX_EV) { g_ev[g_ev_n++] = Ev{EV_MEASURE, id, dt, 0}; }
@@ -277,6 +277,51 @@ static void test_round_trip() {
     zero_meas();
 }
 
+// ============ 8. 边界 N：三轮 / 六轮（容量 = 契约上限）================
+// oracle：
+//   手算 —— OmniDrive 的 J 第三列 = cr/wr（与轮号无关）→ 只给 wz 时【每一轮】目标都相等
+//   记录 —— 假 IO 数「哪些轮被碰过」，证明活跃数 = count_，其余轮一个都不碰
+// ⚠ 越界是 UB：Debug 下可能侥幸通过，**只有消毒档（ASan）能必然抓住** ——
+//   所以验收必跑 ASan + UBSan（本组就是 P24 的回归用例）。
+static void test_omni_boundary_wheel_counts() {
+    const float expect = 10.0f / 3.0f;      // cr/wr = 0.10/0.03
+
+    // (a) 三轮（wn = 3）
+    {
+        zero_meas();
+        ev_reset();
+        ChassisLoop<OmniDrive> loop(unlimited_cfg(), OmniDrive(3, 0.10f, 0.0f, 0.03f),
+                                    fake_measure, fake_set_pwm);
+        loop.set_cmd(Twist{0.0f, 0.0f, 1.0f});
+        loop.tick(0.01f, 1000u);
+        for (uint8_t i = 0; i < 3; ++i) { CHECK(close(loop.wheel_target(i), expect, TOL)); }
+        for (uint8_t i = 3; i < 6; ++i) { CHECK(loop.wheel_target(i) == 0.0f); }
+        int touched[6] = {0, 0, 0, 0, 0, 0};
+        for (int e = 0; e < g_ev_n; ++e) {
+            if (g_ev[e].kind == EV_MEASURE) { ++touched[g_ev[e].id]; }
+        }
+        for (uint8_t i = 0; i < 3; ++i) { CHECK(touched[i] == 1); }
+        for (uint8_t i = 3; i < 6; ++i) { CHECK(touched[i] == 0); }
+    }
+
+    // (b) 六轮（wn = 6 = 契约容量上限；装配层容量必须 ≥ 它）
+    {
+        zero_meas();
+        ev_reset();
+        ChassisLoop<OmniDrive> loop(unlimited_cfg(), OmniDrive(6, 0.10f, 0.0f, 0.03f),
+                                    fake_measure, fake_set_pwm);
+        loop.set_cmd(Twist{0.0f, 0.0f, 1.0f});
+        loop.tick(0.01f, 1000u);
+        for (uint8_t i = 0; i < 6; ++i) { CHECK(close(loop.wheel_target(i), expect, TOL)); }
+        for (uint8_t i = 0; i < 6; ++i) { CHECK(loop.wheel_speed(i) == 0.0f); }
+        int touched[6] = {0, 0, 0, 0, 0, 0};
+        for (int e = 0; e < g_ev_n; ++e) {
+            if (g_ev[e].kind == EV_MEASURE) { ++touched[g_ev[e].id]; }
+        }
+        for (uint8_t i = 0; i < 6; ++i) { CHECK(touched[i] == 1); }
+    }
+}
+
 int main() {
     test_inverse_hand_calc();
     test_acc_limit_property_and_tick_count();
@@ -285,6 +330,7 @@ int main() {
     test_dt_and_now_passthrough();
     test_round_trip();
     test_targets_actually_reach_wheels();
+    test_omni_boundary_wheel_counts();
 
     if (g_fails == 0) { printf("ALL PASS\n"); return 0; }
     printf("%d FAILED\n", g_fails);

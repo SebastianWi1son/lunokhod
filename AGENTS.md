@@ -192,5 +192,5 @@ endif()
 
 - [`kinematics/AGENTS.md`](kinematics/AGENTS.md) —— 账本为空（原来的 3 条都是 odometry 的，已随组件迁走）
 - [`odometry/AGENTS.md`](odometry/AGENTS.md) —— 已有 3 条（同类型字段静默错位 / 契约名两边各写各的 / 旋转矩阵需要 vy≠0 且 yaw≠0 的用例）
-- [`chassis_loop/AGENTS.md`](chassis_loop/AGENTS.md) —— 已有 4 条（契约名漂移 / 内部名跨家族 / 容量不一致越界 / 只测自己用得到的 N）
+- [`chassis_loop/AGENTS.md`](chassis_loop/AGENTS.md) —— 已有 5 条（契约名漂移 / 内部名跨家族 / 容量不一致越界 / 只测自己用得到的 N / 自引用指针按值传递悬空）
 - 其他组件：待建

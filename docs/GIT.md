@@ -2,7 +2,7 @@
 class: fact
 generated: false
 ---
-> **类：B 事实** —— **唯一来源**：别处只许链接，不许复制；改决策只改这里。 全局 git 工作流（2026-09-13 从 control/wheel/docs/ 上移，内容未改，其中 wheel 为示例）。
+> **类：B 事实** —— **唯一来源**：别处只许链接，不许复制；改决策只改这里。 全局 git 工作流（2026-09-13 从 actuator/wheel/docs/ 上移，内容未改，其中 wheel 为示例）。
 > 文档体系与写作规则：README.md
 
 # wheel 开发工作流：SemVer + 渐进稳定分支
@@ -32,7 +32,7 @@ feature/xxx → main → release/v0.x → tag vX.Y.Z
 > 场景：首次 commit 时 `.idea/` 被误提交（原因：.gitignore 行尾注释无效）+ 分支名是 master 而非 main。
 
 ```bash
-cd /home/wilson/Dev/Workspace/lunokhod/control/wheel
+cd /home/wilson/Dev/Workspace/lunokhod/actuator/wheel
 
 # ① 确认 .gitignore 内容正确（注释独占一行，.idea/ 单独一行）
 cat .gitignore

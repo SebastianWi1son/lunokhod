@@ -139,11 +139,11 @@ ENDFOR
 
 ---
 
-## STAGE 3：TwistAccLimiter（**已迁出本库** → `control/twist_acc_limiter/`）
+## STAGE 3：TwistAccLimiter（**已迁出本库** → `command/twist_acc_limiter/`）
 
 ### 3.1 定位（2026-08 修正）
 
-**小礼包**：可选组件，**已迁出为独立模块** `control/twist_acc_limiter/`（STATIC 库，`.hpp`+`.cpp`），**不进 chassis.hpp 聚合入口**。
+**小礼包**：可选组件，**已迁出为独立模块** `command/twist_acc_limiter/`（STATIC 库，`.hpp`+`.cpp`），**不进 chassis.hpp 聚合入口**。
 
 - 为什么是"小礼包"不是核心：限幅是**应用层策略**，不是运动学数学——行业惯例放上层（ROS 导航栈 acc_lim、驱动器固件 ramping），没有一家运动学库内置它
 - 升维机会：THEORY 3.1 分层图里 "Velocity Limiter" 那一格。将来做完整控制系统库（限幅→逆解→里程计→轮PID）时，它升为正式组件；没机会就自己用
@@ -166,7 +166,7 @@ ENDFOR
 ### 3.3 伪代码（完整）
 
 ```cpp
-// control/twist_acc_limiter/inc/twist_acc_limiter.hpp —— Twist 空间加速度限幅器（斜坡发生器）
+// command/twist_acc_limiter/inc/twist_acc_limiter.hpp —— Twist 空间加速度限幅器（斜坡发生器）
 // 定位：上游指令（导航/PID/遥控，可任意跳变）→ 平滑斜坡输出 → kinematics inverse
 // 使用：需要时单独 #include "twist_acc_limiter.hpp"（chassis.hpp 不含它）
 
@@ -224,7 +224,7 @@ private:
 | T5 | 三通道独立 + 上报 | vx 大幅跳变 | vx 序列按斜坡，且 **vx_lim==true、vy_lim==false、wz_lim==false** | 通道隔离 + 饱和标志正确 |
 | T6 | 保持 | target 连续不变 | 输出不变 | 稳态无漂移 |
 
-测试方式：`control/twist_acc_limiter/test/test_twist_acc_limiter.cpp`，同样 ALL PASS + 退出码 0 + -Werror。
+测试方式：`command/twist_acc_limiter/test/test_twist_acc_limiter.cpp`，同样 ALL PASS + 退出码 0 + -Werror。
 
 ### 3.5 与 legacy dsp_ramp_t 的对照（你已经写过的东西）
 

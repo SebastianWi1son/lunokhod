@@ -8,7 +8,7 @@ generated: false
 # TwistAccLimiter 实现真相文档（以代码为准）
 
 > 生成日期：2026-08-22
-> 本文档描述 `control/twist_acc_limiter/` 下**实际存在的代码**，一切以源码为准。
+> 本文档描述 `command/twist_acc_limiter/` 下**实际存在的代码**，一切以源码为准。
 > 根目录 `docs/` 的 DEV_GUIDE.md STAGE 3 是本模块的设计源头（当时叫 `speed_limiter.hpp`，规划放 kinematics 内 header-only），与现状的差异见 §6，问题见 §7。
 > 维护规则：**改代码必须同步改本文档**；冲突时以代码为准并当场修正文档。
 
@@ -19,7 +19,7 @@ generated: false
 Twist 空间三通道独立加速度限幅器（斜坡发生器 / slew rate limiter）：上游指令（导航/PID/遥控，可任意跳变）→ 每通道每帧最多变化 `acc·dt` 的平滑输出 → 下游逆运动学。
 
 - 在 ARCHITECTURE.md 下行链中占位 ①：`SpeedLimiter (Vx,Vy,ω) → 限幅后 (Vx,Vy,ω)`，是"**先限幅、后分解**"原则的执行者（限幅约束车体三量，不在轮速空间限，保运动学一致性）。
-- 本模块是 kinematics STAGE 3 的实际落地形态，但**独立成模块**（`control/twist_acc_limiter/`，STATIC 库），不进 kinematics 的 `chassis.hpp` 聚合入口。
+- 本模块是 kinematics STAGE 3 的实际落地形态，但**独立成模块**（`command/twist_acc_limiter/`，STATIC 库），不进 kinematics 的 `chassis.hpp` 聚合入口。
 - 契约复用：`Twist` 类型 include 自 **`contracts`** 库的 `contracts.hpp`（**单一事实来源**）。
   （2026-09-15：原先写的是“include 自 kinematics 的 contracts.hpp”—— 
   契约已提为最底层库 `contracts/`，本组件对 kinematics 的依赖已断开。）
@@ -28,7 +28,7 @@ Twist 空间三通道独立加速度限幅器（斜坡发生器 / slew rate limi
 ## 2. 实际目录结构
 
 ```
-control/twist_acc_limiter/
+command/twist_acc_limiter/
 ├── inc/twist_acc_limiter.hpp        ← 公开 API：LimitResult + TwistAccLimiter（声明）
 ├── src/twist_acc_limiter.cpp        ← 实现（声明/定义分离 → STATIC 库）
 ├── test/test_twist_acc_limiter.cpp  ← 锚点测试 T1~T6 + 防御回归
@@ -105,12 +105,12 @@ if (dt <= 0.0f) {
 
 | # | 设计文档说（DEV_GUIDE STAGE 3 / DESIGN.md / ARCHITECTURE.md） | 代码现实 |
 |---|---|---|
-| 1 | kinematics 内 `speed_limiter.hpp`（当时名，header-only），STAGE 3“待开发” | 独立模块 `control/twist_acc_limiter/`，.hpp+.cpp 声明定义分离，STATIC 库。**设计文档已于 2026-09-14 回改** |
+| 1 | kinematics 内 `speed_limiter.hpp`（当时名，header-only），STAGE 3“待开发” | 独立模块 `command/twist_acc_limiter/`，.hpp+.cpp 声明定义分离，STATIC 库。**设计文档已于 2026-09-14 回改** |
 | 2 | 类名 `SpeedLimiter` | `TwistAccLimiter`（不在 3.6 命名候选表内，最终命名未回写任何决策记录） |
 | 3 | `LimitResult { out; vx_lim, vy_lim, wz_lim; }` | `LimitResult { out_; is_vx_lim_, is_vy_lim_, is_wz_lim_; }`（字段名不同） |
 | 4 | dt≤0 直通返回、**不更新** prev_ | 直通**且** `prev_ = t_cmd`（修复回跳 bug，含回归测试；伪代码是过时真相） |
 | 5 | 结构化绑定用法 `auto [out, vx_lim, ...] = limiter.limit(...)` | 实际代码/测试用 `r.out_`、`r.is_vx_lim_` 成员访问 |
-| 6 | DESIGN.md 架构树把 speed_limiter.hpp 画在 kinematics 内 | ✅ **2026-09-14 已回改**（DESIGN.md §架构 现写 `control/twist_acc_limiter/`） |
+| 6 | DESIGN.md 架构树把 speed_limiter.hpp 画在 kinematics 内 | ✅ **2026-09-14 已回改**（DESIGN.md §架构 现写 `command/twist_acc_limiter/`） |
 | 7 | 上报机制"方案 a LimitResult 返回式" | ✅ 一致，已实现（AGENTS.md 记录的选型落地） |
 
 ## 7. 问题清单（只记录，不修改）

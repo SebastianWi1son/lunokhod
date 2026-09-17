@@ -24,8 +24,8 @@ generated: false
 |---|---|---|
 | 麦轮运动学（正/逆解） | `kinematics/inc/drive_mecanum.hpp` | ✅ 已验收（互逆锚点全绿） |
 | 里程计 | `odometry/inc/odometry.hpp` | ✅ 已验收（140 断言） |
-| Twist 限幅 | `control/twist_acc_limiter/` | ✅ v0.1.0 |
-| 单轮执行（S 曲线 + PID） | `control/wheel/` | ✅ v0.1.0 |
+| Twist 限幅 | `command/twist_acc_limiter/` | ✅ v0.1.0 |
+| 单轮执行（S 曲线 + PID） | `actuator/wheel/` | ✅ v0.1.0 |
 | 6 轴姿态（Mahony） | `foucault`（独立仓） | ⚠️ PC 侧已验收，**未上过真机、无 IMU 驱动** |
 
 ### 缺口（按依赖顺序）
@@ -155,9 +155,16 @@ generated: false
 ## 架构/一致性
 
 ### P3. Ramp 跨项目统一（DRY）⬜ 待决策
-- **内容**：`control/wheel/src/ramp.cpp` 与 `twist_acc_limiter` 的 `ramp()` **算法完全相同**（max_step=rate·dt + clamp）
+- **内容**：`actuator/wheel/src/ramp.cpp` 与 `twist_acc_limiter` 的 `ramp()` **算法完全相同**（max_step=rate·dt + clamp）
 - **权衡**：提取公共 `inc/ramp.hpp`（两项目共用）vs 接受重复 20 行（零依赖原则）
 - **下一步**：决策后执行；注意 wheel v0.1.0 已发布，提取是 v0.2.0 的变更（破坏性）
+- **2026-09-16 扩大**：同类问题已扩散到**跨仓** —— PID 有**两份行为相同的活副本**
+  （`lunokhod/actuator/wheel/inc/pid.hpp` ↔ `cyclotron/foc/inc/foc/algo/pid.hpp`；`pid.cpp` 逐字节相同，
+  只差 namespace / include）+ 一份**只读归档快照**（`~/Develop/Workspace/pid/source/`）
+  + 需求登记在**第四处**（仓外 `~/Develop/Workspace/pid` 的 `optimization_considerations.md`，本轮新增 D3）。
+  **已定约定**：PID 算法需求**归口 `~/Develop/Workspace/pid`**（登记），**落地同步两份活副本**
+  （以 cyclotron 为准 —— 其 README 声明）。**待决策**：收敛成单一来源（子模块 / 单一副本 + 转发头）
+  vs 接受双份人工同步。
 - **优先级**：🟡 中（两项目都已发布，随时可做）
 
 ### P4. 分支名统一 ✅ **已完成（2026-09-14）**
@@ -207,6 +214,10 @@ generated: false
 - **内容**：评审建议 `limit_out_=0` 默认改为"不限制"；但 wheel 已定案 **"0=disabled"惯例**（max_rate=0 关斜坡、thresh=0 关分离）——两者冲突
 - **决策点**：0 语义维持（文档写明坑）vs 改 sentinel vs 分层（0=中立 + preset）
 - **影响**：若改，牵动 wheel v0.2.0（已发布 v0.1.0 不可改）
+- **2026-09-16 补**：本条现在多了**第二重身份** —— `pid` 仓优化条目 **D3（饱和/限幅状态上报）的硬前置**：
+  `limit_out_ = 0` 会把输出**钳死**，于是「输出饱和」标志在**默认配置下恒为 true**（标志会骗人）。
+  **P11 不定，D3 就不能落地。** 详见仓外 `~/Develop/Workspace/pid` 的 `optimization_considerations.md` D3。
+  顺带：定 P11 的**签名**（加 getter vs 改 `calc()` 返回类型）时，**0 语义自然被一起定下来** —— 反而更容易拍。
 - **优先级**：🔴 高（真实踩坑风险，但改法需先拍板）
 
 ### P12. 防御校验 ⬜ 未开工
@@ -241,6 +252,13 @@ generated: false
   四档编译零告警、聚合 `ctest` **9/9**、13 个变异全部变红、被消费零泄漏；
   `chassis_loop/docs/IMPL.md`（代码地图）+ 三处组件清单（README / AGENTS §5.1 / ARCHITECTURE §2）已同步；
   新增 **P23**（`wheel` 的 `-Wconversion` 隐式转换，验收时撞到）
+- 2026-09-16（三）：**运动状态暴露的落地准备** ——
+  概念定案「**PWM 是数字、不是硬件；边界是「调用 vs 被调用」**」；
+  **PID 算法需求归口仓外 `~/Develop/Workspace/pid`**（登记其 `optimization_considerations.md`
+  **D3 饱和/限幅状态上报**，改前已备份到 `/tmp/`）；
+  新增 **P25**（装配层接出限幅饱和标志）/ **P26**（轮级 `effort` 暴露 + `SetPwmFn`→`SetEffortFn` 命名中性化）；
+  **P3 扩大**为跨仓同源副本 · **P11 增加「pid 仓 D3 硬前置」身份** ·
+  **P19 补 §九**（三元组 + 零改动数据入口 + 维度归属 · 明确不新建暴露组件）· **P23 并入 P26**
 
 ---
 
@@ -365,6 +383,40 @@ FK(measured_wheel_speeds).wz  −  gyro_z
 
 - **优先级**：🟡 中（**被「先采数据」卡住**；而采数据的入口正是 P20）
 
+#### 九、2026-09-16 补充：落地清单 + 数据入口确认
+
+**1. 能分类「打滑 / 堵转」的最小数据集 = 三元组**（缺一个就分不开）：
+
+| 量 | 来源 | 现状 |
+|---|---|---|
+| `wheel_target(i)` 目标 | 逆解输出 | ✅ 已有 |
+| `wheel_speed(i)` 实测 | 编码器（`MeasureSpeedFn`） | ✅ 已有 |
+| `wheel_effort(i)` 努力度 | PID 输出（现在**没有出口**） | ❌ → **P26** |
+
+理由：**堵转与空转打滑在转速上是同一个观测**（都表现为「跟不上指令」），
+**只有加上「努力度」才分得开**（堵转 = 力到顶 + 转速≈0；空转 = 力不大 + 转速正常）。
+
+**2. 「先采数据」这一步【零改动】可做**（这是 §八 那个卡点的解）：
+`SampleSink` 是在 `odom_.update()` 内部**同步调用**的，而 `odom_.update()` 是 `tick()` 的**最后一步**
+→ **在 sink 回调里读 `chassis_loop` 的只读口，拿到的就是同一拍的值**（不需要额外缓冲、不需要时间戳对齐）。
+
+**3. 明确不做（本轮再次确认，别重开）**：**不新建「运动状态暴露」组件** ——
+数据全在，多一层转发只会引入同步 / 生命周期问题；形态就是「**sink + 只读口**」。
+判据同 `chassis_loop/docs/DESIGN.md` §2 拒绝预留 `δcmd`（**为不存在的消费者开 API = 猜**）。
+
+**4. 维度补全（本轮盘过、确认属库外的）**：
+
+| 维度 | 归属 | 备注 |
+|---|---|---|
+| **倾角 pitch/roll** | foucault + 应用层 | **30° 坡必需**（水平位置多报 15.5%，见本文档「坡带来的两个后果」）；`chassis_loop` 不碰姿态 |
+| **轮间一致性** | 库外 | `Wheel` 每轮一个实例，看不见「轮间」；装配层只给事实，判定在外 |
+| **位移残差** | 库外 | 需外部绝对参照（视觉 / 激光 / GNSS） |
+
+**5. 残差的第一消费者其实是「标定」，不是「打滑」**：
+标定误差 = **长期一致的系统性残差**（轮径 / 轮距 / `twist_scale_` / IMU 安装对齐）；
+打滑 = **瞬时残差**。两者**共用同一套采样**，但**判定方法完全不同**
+（长时最小二乘 / 已知基线 vs 瞬时门限）。**标定门槛最低、立刻能用**（G6 缺口）。
+
 ---
 
 ## 2026-09-15 新增
@@ -438,15 +490,17 @@ FK(measured_wheel_speeds).wz  −  gyro_z
 ### P23. `wheel` 在 `-Wconversion` 下有一条隐式转换 ⬜ 待决策（2026-09-16 提出）
 
 - **来源**：验收 `chassis_loop` 时跑「严格档」撞到的 —— **不是那一批代码的问题**。
-- **现象**：`control/wheel/src/wheel.cpp` 的 `set_pwm_(motor_id_, out_pwm)`：`float` → `int16_t` 隐式转换，
+- **现象**：`actuator/wheel/src/wheel.cpp` 的 `set_pwm_(motor_id_, out_pwm)`：`float` → `int16_t` 隐式转换，
   开 `-Wconversion` 时 `-Werror=float-conversion` 直接挂。
 - **性质**：**功能上是有意的** —— PWM 接口就是整数，且 `out_pwm` 已被 `PIDConfig::limit_out_` 夹住（默认 1000），
   不会溢出。问题只在「有意」看不出来（隐式截断）。
 - **选项**：① 显式 `static_cast<int16_t>`（一行，表达意图）；② 加饱和钳位再 cast；③ 不管
 - **影响面**：现状**不影响 CI**（各组件自测只用 `-Wall -Wextra -Werror`），但谁想开 `-Wconversion` 编整仓就会卡住。
+- **2026-09-16 补**：**并入 P26 一起修** —— 落 `effort_` 时那两处调用本来就要改
+  （`set_pwm_` → `set_effort_` + 显式 `static_cast<int16_t>`），顺手关闭本条。
 - **优先级**：🟢 低（一行的事，属「跨组件一致性」）
 
-### P24. 装配层的轮子容量 < 契约容量 → 越界 ⬜ **待修（真 UB）**（2026-09-16 提出）
+### P24. 装配层的轮子容量 < 契约容量 → 越界 ✅ **已修（2026-09-16）**
 
 - **内容**：契约 `WheelSpeeds.values_[6]` 允许 **6** 轮，`ChassisLoop` 却只持有 `Wheel* wheels_[4]`。
   `tick()` 按 `count_` 循环 `wheels_[i]` → `ChassisLoop<OmniDrive>`（wn = 6）**越界写**。
@@ -458,4 +512,99 @@ FK(measured_wheel_speeds).wz  −  gyro_z
   ③ 容量做模板参数 `ChassisLoop<Chassis, N>`（零浪费，但要 `index_sequence` 构造 N 个 `Wheel`）
   ④ 真 N 泛化（给 `Wheel` 加默认构造 / `std::array` + 工厂）
 - **附带**：测试要补「边界 N」用例（N = 契约上限、N = 1）—— 否则「支持 N」只是口头声明。
-- **优先级**：🟡 中（不阻塞现有消费方，但是真 UB，且出问题的类型就在本仓）
+- **修法（2026-09-16 定案）**：**容量对齐契约 = 6**（`wheels_[6]`）—— 见 `chassis_loop/docs/DESIGN.md` §8.2 **D10**；
+  配套补了**边界 N** 测试（三轮 / 六轮），并验证「容量退回 4 → 新用例在 ASan 下必然变红」。
+  **未选**：容量做模板参数（零浪费，要 `index_sequence`）· 真 N 泛化（要给 `Wheel` 加默认构造）—— 留到真计较 RAM 时。
+- **优先级**：✅ 关闭
+
+---
+
+## 2026-09-16 新增（PID 归口 + 运动状态暴露）
+
+### P25. 装配层暴露限幅饱和标志（`LimitResult` 被丢弃）🟡 待手敲（2026-09-16 提出）
+
+- **内容**：`chassis_loop::tick()` 里 `t_cmd_final_ = limiter_.limit(t_cmd_in_, dt).out_;` —— **只取输出**，
+  `LimitResult` 的 `is_vx_lim_` / `is_vy_lim_` / `is_wz_lim_` 三个标志**算完就丢**。
+  它们是「上层要的速度超出加速度能力」的第一手证据，**零算法成本**（信息早就算出来了）。
+- **改动位置**（`chassis_loop/inc/chassis_loop.hpp` —— INTERFACE 库，**只此一个文件、3 处**）：
+  1. `tick()`：`lim_res_ = limiter_.limit(t_cmd_in_, dt); t_cmd_final_ = lim_res_.out_;`
+  2. getters 区：`LimitResult limit_result() const { return lim_res_; }`
+  3. private 区：`LimitResult lim_res_{};`
+     ⚠ **必须带 `{}`** —— `LimitResult` / `Twist` 都是**无默认成员初始化器的聚合类型**：
+     写 `LimitResult lim_res_;` 是**默认初始化 = 成员为垃圾值**（同 `WHEEL_LESSONS` #7 的坑）。
+- **可选去冗余**：`t_cmd_final_` 与 `lim_res_.out_` 是**同一份数据的两个副本**；
+  想干净就删 `t_cmd_final_` 改用它（`cmd()` / `inverse_kinematics` / `odom_.update` 共 5 处小改）。
+- **顺手**：`tick()` 里那行残留注释 `// --- process to res残差 ---`（它下面实际是 `odom_.update`）——
+  删掉，或改成「此处不留残差，残差在库外」。
+- **不用改** `twist_acc_limiter` —— 它**已经交了** `LimitResult`，问题只在装配层没接。
+- **测试**：AI 写（判别力：故意不接 `lim_res_` → 标志恒 false → 必须变红）。
+- **优先级**：🟡 中（3 行改动、零风险；是 P19 采数据的字段之一）
+
+### P26. 轮级「努力度」（effort）暴露 + `SetPwmFn` 命名中性化 🟡 建议进 v0.2.0（2026-09-16 提出）
+
+- **背景**：分类打滑/堵转需要**三元组** `目标 / 实测 / 努力度`。前两个装配层已有
+  （`wheel_target(i)` / `wheel_speed(i)`），**第三个没有出口** —— `Wheel::update()` 里 `out_pwm`
+  交给 `set_pwm_` 就没了。而它是**唯一能分开「堵转」与「空转打滑」的量**（只有速度分不开：两者都是「跟不上指令」）。
+- **概念澄清（本轮定案）**：**`SetPwmFn` 不是「碰了硬件」，而是「命名绑定了实现」**。
+  `SetPwmFn` 是**注入的回调**，库连「这是 PWM」都不知道（对面可能是 TIM 寄存器 / PC 模型 / 日志文件）。
+  **硬件的边界是「调用 vs 被调用」，不是「数字 vs 硬件」**。
+  **真·PWM 实现（`hal::set_pwm`）叫 `set_pwm` 完全正确** —— 错的只是把它写进**库的接口**：
+  库的接口属于**所有**调用方。这条与 `WHEEL_LESSONS` §5 的规矩一致
+  （「命名中性（`MeasureSpeedFn` / `target_speed_`），单位由调用方约定」）——
+  `MeasureSpeedFn` 做到了中性，`SetPwmFn` 没有。
+- **改名方案**：`SetPwmFn` → **`SetEffortFn`**（control effort，控制论术语、单位无关）。对称性论据最强：
+
+  ```
+  MeasureSpeedFn  →  speed_cur_  →  get_speed()
+  SetEffortFn     →  effort_     →  effort()
+  ```
+
+  动词 + 物理量，**一进一出完全对称**。
+- **改动位置（3 个活代码文件）**：
+  - `actuator/wheel/inc/wheel.hpp`：`+ float effort() const;` · `+ float effort_;` · `SetPwmFn`→`SetEffortFn` · `set_pwm`→`set_effort`
+  - `actuator/wheel/src/wheel.cpp`：初始化列表 `+ effort_(0.0f)` · `update()` 里存 `effort_` ·
+    `stop()` 里清 `effort_` · 两处 `static_cast<int16_t>`（见 P23）
+  - `chassis_loop/inc/chassis_loop.hpp`：`+ float wheel_effort(uint8_t i) const` · `using SetPwmFn`→`using SetEffortFn`
+- **四个坑**：① `effort_` **必须进初始化列表**（`WHEEL_LESSONS` #7）
+  ② `stop()` 里也要清（否则 stop 后还留着上一拍的值）
+  ③ 注释写明语义 = 「**本拍 PID 输出**」，不是「实际写到硬件的值」（回调为空时仍有值）
+  ④ 量纲由调用方约定 → 文档声明 + **测试钉单位**（`WHEEL_LESSONS` §5）；
+  **不做归一化**（那要库知道 `limit` 的语义 → 撞 P11）
+- **对调用方零影响**：`KND_Trial` / `fw_poc` 的 `hal::set_pwm` 是**位置传参**，不用动。
+- **A 类日志会留旧名**（`odometry/docs/log/ODOMETRY_FAQ.md`、`actuator/wheel/docs/log/WHEEL_LESSONS.md`）——
+  **正常，不许回头改**（日志只增不改）。
+- **时机**：**不单独发版** —— 与 **P11**（0 语义）+ **P23**（-Wconversion）+ effort 一起进 **wheel v0.2.0**，
+  一次版本跳变解决四件事。**现在只有 3 个引用文件，是改名最便宜的时候**（引用点只会越来越多）。
+- **测试**：AI 写（判别力：故意不存 `effort_` → getter 恒 0 → 必须变红）。
+- **优先级**：🟡 中（P19 的前置之一；改名本身不紧急，但拖延变贵）
+
+---
+
+## 2026-09-16 新增（分层整理 + 通用框架立项）
+
+> ⚠ 编号避开 P25（限幅饱和标志）/ P26（effort + `SetPwmFn` 改名）—— 那两条是**同一个文件**
+> （`chassis_loop/inc/chassis_loop.hpp`）的待手敲项，与接缝改造**互补不冲突**：
+> 接缝版只是把 `limiter_.limit(...)` 的调用点挪了个位置，P25 要接的 `LimitResult` 照样接得上。
+
+### P27. FOC 作为执行器：接缝细化 ⬜ **待立项**（2026-09-16）
+
+- **两种形态，接缝吃法不同**：
+  - **电流环跑在驱动里（推荐）**：FOC = HAL 之下的实现 —— `set_pwm(id, ±1000)` 的 effort
+    语义按「目标转矩」解释即可 → **装配层与 `Wheel` 都不用改**。
+  - **FOC 自带速度环**（对外只收「速度模式」）：它替换的是「轮控」那一格 →
+    写一个 `FocSet` 实现执行器组契约（[`../chassis_loop/docs/DESIGN.md`](../chassis_loop/docs/DESIGN.md) §5.2），
+    **装配层一个字不改**。
+- **要定的第一件事**：**速度环放在哪一层**（`Wheel` 里 / FOC 驱动里）—— 它决定要不要 `FocSet`。
+- **与 P7（FOC 重构）相邻**；素材：`cyclotron`（FOC 项目，已冻结）。
+- **优先级**：🟢 低（等真做 FOC 接入）
+
+### P28. Swerve 作为执行器组：**输出契约要一起扩** ⬜ **待立项**（2026-09-16）
+
+- **接缝本身已装得下**（写一个 `ModuleSet` 实现那四个方法即可）—— 但**那不够**：
+- **真正的障碍是契约**（同 **P21**）：`WheelSpeeds` 只有 `float values_[6]`，装不下每模块的
+  `(角度, 速度)`；而且 `odometry` 的记录契约 `OdometrySample.ws_` **也是** `WheelSpeeds`。
+- **要一起动的四处（同一次改动，先改设计）**：① `contracts` 新增模块级契约
+  ② `kinematics` 的 Swerve 实现 ③ `odometry` 的记录字段 ④ 执行器组的
+  `Setpoints` / `Feedbacks` 类型别名（`DESIGN.md` §5.2 现在**有意**把它们钉在 `WheelSpeeds`）。
+- **接缝的形状不用改** —— 这正是 **D11** 抽对了的证据。
+- **优先级**：🟢 低（等 Swerve 立项，见 P21）
