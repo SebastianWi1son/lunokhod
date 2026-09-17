@@ -4,6 +4,8 @@ generated: false
 ---
 > **类：C 状态** —— **跟代码变**。⚠️ 与代码天然重复，目标形态是「一屏文件地图 + 追加式变更记录」。
 > 文档体系与写作规则：../../docs/README.md
+> **命名空间（2026-09-17）**：本文档里的类型名**省略 `lunokhod::` 前缀** —— 例：`MecanumDrive` 即
+> `lunokhod::kinematics::MecanumDrive`，`Twist` 即 `lunokhod::Twist`（规则见 [`AGENTS.md`](../../AGENTS.md) §3.1）。
 
 # Odometry 实现真相文档（以代码为准）
 

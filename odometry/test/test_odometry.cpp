@@ -21,6 +21,11 @@
 #include <cstdint>
 #include <cstdio>
 
+// 命名空间（2026-09-17）：全仓类型收进 lunokhod::（规则见 AGENTS.md §3）
+using namespace lunokhod;
+using namespace lunokhod::odometry;
+
+
 static const float kPi = 3.14159265358979323846f;
 static const float kTwoPi = 6.28318530717958647692f;
 

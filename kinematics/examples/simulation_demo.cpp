@@ -5,6 +5,11 @@
 #include <cstdio>
 #include <cmath>
 
+// 命名空间（2026-09-17）：全仓类型收进 lunokhod::（规则见 AGENTS.md §3）
+using namespace lunokhod;
+using namespace lunokhod::kinematics;
+
+
 struct Leg { Twist cmd; float seconds; };
 
 template<typename Chassis>
@@ -72,7 +77,7 @@ int main() {
     };
 
     // ---- OmniDrive: 菱形斜线（(0.3,0.3) × 4 边）+ 转 360° ----
-    OmniDrive omni(3, 0.15f, 0.0f, 0.03f);
+    OmniDrive<3> omni(0.15f, 0.0f, 0.03f);
     const Leg omni_legs[] = {
         {{0.3f, 0.3f, 0.0f}, 1.0f}, {{0.0f, 0.0f, 1.5707963f}, 1.0f},
         {{0.3f, 0.3f, 0.0f}, 1.0f}, {{0.0f, 0.0f, 1.5707963f}, 1.0f},

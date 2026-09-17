@@ -39,7 +39,7 @@ C++17 header-only 零依赖嵌入式底盘运动学库（差速/Mecanum/全向 +
 inc/kinematics.hpp     数学核心：Kinematics<Derived>（CRTP 能力接口）+ jacobian_apply 翻译官 + k2PI
 inc/drive_diff.hpp     DiffDrive : public Kinematics<DiffDrive>
 inc/drive_mecanum.hpp  MecanumDrive（4×3 J，forward 伪逆）
-inc/drive_omni.hpp     OmniDrive（N×3 J，forward 通用 N 轮伪逆，任意 wn/gamma）
+inc/drive_omni.hpp     OmniDrive<N>（N×3 J，forward 通用 N 轮伪逆，任意 γ；**轮数是模板参数**）
 inc/chassis.hpp        对外聚合入口（瞬时映射唯一入口，用户只 include 这一个）
 test/test_kinematics.cpp   测试驱动（断言 + 退出码，三底盘全绿）
 examples/                  使用演示（独立 main）
@@ -51,7 +51,7 @@ examples/                  使用演示（独立 main）
 - 命名语义：**chassis（应用外壳）在上，kinematics（数学）在下**；具体底盘（DiffDrive 等）才是"底盘"，基类是"运动学能力接口"（Comparable 模式）
 - CRTP 派发：基类 const 方法 `static_cast<const Derived*>(this)->xxx_impl()`
 - 接口层/实现层方法均须 `const`（纯函数，不持有状态；唯一有状态的是 SpeedLimiter（可选附赠，不在 chassis.hpp 聚合入口））
-- jacobian_apply：`template<uint8_t N>` 绑定数组尺寸，运行时行数 wn（diff=2，mec=4，omni=wn_）；forward 目前手写（pinv 展开），不抽矩阵
+- jacobian_apply：`template<uint8_t N>` 绑定数组尺寸，运行时行数 wn（diff=2，mec=4；omni 已改成模板参数 N，无运行期轮数）；forward 目前手写（pinv 展开），不抽矩阵
 - 零堆、零异常、仅 `<cmath>`/`<cstdint>`；POD 值语义（聚合初始化、可 memcpy）
 
 ## 命名评估框架（暗线：每次出现新变量/函数名时按此评估）
@@ -78,7 +78,7 @@ vs `contracts`（表意）中选 contracts。SpeedLimiter 上报机制选方案 
 
 | 日期 | 坑 | 加的规则 |
 |---|---|---|
-|  |  |  |
+| 2026-09-17 | **把「常量」当「参数」→ 定义域问题缠了三轮**：`OmniDrive(uint8_t wn, …)` 把机械轮数做成**运行期参数**，而它要写进定长 `J[6][3]` —— 于是必须回答「合法范围是多少、越界怎么办」（`wn=7` 实测**越界写栈**：`stack smashing detected`）。修法第一轮选「夹住」→ 被判定为**洗白数据**（7 轮的车被静默按 6 轮建模）；第二轮改「判无效」（`is_valid()` + 零输出）→ 仍要**调用方自觉查**，而「用户会不会遵守」的答案是**不会**；第三轮才到位：轮数是**每台车一个、构建期已知的机械事实** → 提成**模板参数**，非法轮数**写不出来** | ① **能用常量就别用参数**：把常量做成运行期参数，就必须额外回答「定义域 / 越界怎么办」，而这两件事本身就是新 bug 的来源；② 凡是「必须做的检查」，**别指望文档与自觉** —— 要么进类型系统（编译期），要么进 CI（本例新增**反例编译测试**：非法值若编得过，`cmake` 配置阶段直接失败）；③ 机械事实（轮数 / 轴距）在构建期已知，**运行期化之前先问一句「它真的会变吗」** |
 
 > 2026-09-15：原有 3 条全部是 **odometry** 的坑（`OdometrySample` 字段顺序 / 契约字段名 /
 > 旋转矩阵 `vy*sin`），已随该组件迁至 [`../odometry/AGENTS.md`](../odometry/AGENTS.md) §4。

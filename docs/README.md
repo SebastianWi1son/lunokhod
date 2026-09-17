@@ -132,7 +132,7 @@ _REVIEW     审查 / 复盘  例：STAGE1_REVIEW.md（一次性 → 放 log/）
 ## 5. 目录地图
 
 ```
-lunokhod/
+lunokhod/                              （全仓类型在 `lunokhod::` 之下 —— 规则见 AGENTS.md §3.1）
 ├── README.md                          B 事实：门面（是什么 + 怎么跑）
 ├── AGENTS.md                          B 事实：全局 AI 规则（pi / Claude Code 只认这个约定名，见 §3b）
 ├── LICENSE                            MIT
@@ -142,19 +142,20 @@ lunokhod/
 │   ├── ARCHITECTURE.md                B 事实：全局架构
 │   ├── GIT.md                         B 事实：git 工作流
 │   ├── ALGO_LIB_DECISION.md           B 事实：算法库策略（专案）
+│   ├── INTEGRATION.md                 B 事实：下游接入指南（一份完整调用）
 │   ├── TODO.md                        C 状态：唯一待办源
 │   └── log/
 │       ├── REVIEW_RESPONSE.md         A 日志：外部评审查验
 │       └── HANDOFF.md                 A 日志：交接快照（★ 新 agent 先读这个）
 ├── contracts/                         最底层库：Twist / WheelSpeeds / Pose（无依赖）
 │   └── inc/contracts.hpp
-├── chassis_loop/                      库：装配层（限幅 → 逆解 → N×Wheel → 正解 → 里程计）
-│   ├── AGENTS.md                      B 事实：组件级规则 + 错误账本（4 条）
-│   ├── inc/chassis_loop.hpp           `ChassisLoop<Chassis>`（INTERFACE 库，无 .cpp）
+├── chassis_loop/                      库：装配层（限幅 → 执行器组 → 里程计；INTERFACE，无 .cpp）
+│   ├── AGENTS.md                      B 事实：组件级规则 + 错误账本（5 条）
+│   ├── inc/chassis_loop.hpp           编排层 `ChassisLoop<ActuatorSet>`（只认接缝契约）
+│   ├── inc/wheel_set.hpp              执行器组 `WheelSet<Chassis>`（接缝的唯一实现）
 │   ├── docs/
-│   │   ├── DESIGN.md                  B 事实：契约 / 决策 D1~D9（设计权威）
+│   │   ├── DESIGN.md                  B 事实：契约 / 决策 D1~D12（设计权威）
 │   │   ├── IMPL.md                    C 状态：代码地图
-│   │   ├── WORK_SEAM.md               D 施工单：执行器组接缝 ← 当前施工
 │   │   └── log/ACCEPTANCE.md          A 日志：首批落地与验收（含金标逐位比对）
 │   └── test/test_chassis_loop.cpp     测试（AI 写）
 ├── kinematics/                        库：运动学正/逆解（差速 / 麦轮 / 全向）

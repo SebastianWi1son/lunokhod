@@ -1,6 +1,8 @@
 #pragma once
 
 #include "kinematics.hpp"
+namespace lunokhod::kinematics {
+
 
 class MecanumDrive : public Kinematics<MecanumDrive> {
 public:
@@ -35,4 +37,4 @@ private:
     float r_;
 };
 
-
+}  // namespace lunokhod::kinematics

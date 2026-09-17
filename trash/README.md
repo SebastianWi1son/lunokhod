@@ -14,6 +14,8 @@ generated: false
 
 | 路径 | 它到底是什么 | 为什么在这里 | 判定后怎么处理 |
 |---|---|---|---|
+| `WORK_FREEZE.md`（2026-09-17） | **D 施工单** —— 冻结前收尾（P25 限幅饱和标志 / P12 `OmniDrive` 轮数） | 两项均已闭合：P25 用户手敲已核（装配层 9/9 + 39 条红→绿）；P12 改为 **模板参数** `OmniDrive<N>` + `static_assert` + **CMake 反例编译测试**（守卫被删则配置阶段失败）；KND 仿真输出仍逐位不变 | **删** |
+| `WORK_SEAM.md`（2026-09-17） | **D 施工单** —— 执行器组接缝（"通用框架"）+ 逐处对照表 | 已验收：四档零告警 · 聚合 9/9 · 12 变异全红 · **KND 仿真输出逐位相同**；契约与决策已入 `DESIGN.md` §5.2 / D11 / D12 | **删** |
 | `WORK_CHASSIS_LOOP.md`（2026-09-16） | **D 施工单** —— chassis_loop（装配层）的参考实现 | 已验收：四档编译零告警 · 7 组测试 · 聚合 9/9 · 13 变异全红 · **KND_Trial 仿真输出 md5 逐位相同**；代码本体才是源 | **删**（历史在 git；契约与决策已入 `chassis_loop/docs/DESIGN.md`，验收记录入 `chassis_loop/docs/log/ACCEPTANCE.md`） |
 | `WORK_ODOMETRY.md`（2026-09-14） | **D 施工单** —— odometry 的参考实现（带 D1~D10 决策点标注） | 已验收（`test_odometry` **116/116**），施工单使命结束；代码本体才是源 | **删**（历史在 git；验收记录已入 `kinematics/docs/IMPL.md` §9 + `docs/TODO.md` P15） |
 | `WHEEL_BUILD_GUIDE.md`（348 行） | **D 施工单** —— control/wheel 的构建指导 | wheel 已完成并发布 v0.1.0，施工单使命结束；教训已沉淀进 `control/wheel/docs/log/WHEEL_LESSONS.md` | ① 删（历史在 git）；或② 抽出“设计决策”并入 wheel 的 B 类文档 |

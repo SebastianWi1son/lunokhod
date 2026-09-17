@@ -3,6 +3,8 @@
 #include "contracts.hpp"
 #include <cmath>
 #include <cstdint>
+namespace lunokhod::odometry {
+
 
 struct OdometrySample {
     uint32_t tick_;
@@ -69,3 +71,5 @@ private:
     SampleSink sink_;
     void* sink_ctx_;
 };
+
+}  // namespace lunokhod::odometry

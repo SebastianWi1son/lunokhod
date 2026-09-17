@@ -1,6 +1,11 @@
 #include "chassis.hpp"
 #include <cstdio>
 
+// 命名空间（2026-09-17）：全仓类型收进 lunokhod::（规则见 AGENTS.md §3）
+using namespace lunokhod;
+using namespace lunokhod::kinematics;
+
+
 static void print_ws(const char* name, const WheelSpeeds& ws) {
     printf("%-10s count=%u  [", name, (unsigned)ws.count_);
     for (uint8_t i = 0; i < ws.count_; ++i)
@@ -33,7 +38,7 @@ int main() {
     print_twist("recovered", back2);
 
     // ===== 3. Omni（3 轮，R=0.15m，γ=0，轮半径 0.03m）=====
-    OmniDrive omni(3, 0.15f, 0.0f, 0.03f);
+    OmniDrive<3> omni(0.15f, 0.0f, 0.03f);
     Twist cmd3{0.0f, 0.5f, 0.0f};                    // 指令：纯横移
     printf("\n[OmniDrive]  cmd: 横移 0.5m/s\n");
     WheelSpeeds ws3 = omni.inverse_kinematics(cmd3);

@@ -9,6 +9,12 @@
 #include <cstdio>
 #include <cmath>
 
+// 命名空间（2026-09-17）：全仓类型收进 lunokhod::（规则见 AGENTS.md §3）
+using namespace lunokhod::wheel;
+using namespace lunokhod;
+
+
+
 static int g_fails = 0;
 static bool close(float a, float b, float tol = 1e-3f) { return std::fabs(a - b) <= tol; }
 #define CHECK(x) do { if (!(x)) { printf("FAIL %d: %s\n", __LINE__, #x); ++g_fails; } } while(0)
@@ -136,6 +142,7 @@ static void test_wheel() {
     CHECK(g_pwm_calls == 100);
     CHECK(g_pwm_out > 0);
     CHECK(ramped);
+    CHECK(w.effort() == g_pwm_out);          // 最近一次算出的 effort = 回调收到的值（外部观察者）
 
     // 5.3 测速透传：回调返回值 → get_speed()
     g_measured = 500.0f;
@@ -145,6 +152,8 @@ static void test_wheel() {
     // 5.4 stop：立即置 0；测速归零后再 update 输出保持 0
     w.stop();
     CHECK(g_pwm_out == 0);
+    CHECK(w.effort() == 0);                  // stop() 之后归零
+    CHECK(g_pwm_calls == 102);               // 101（上面那次 5.3 的 update）+ 1（stop 写 0）
     g_measured = 0.0f;
     w.update(0.01f);
     CHECK(g_pwm_out == 0);
@@ -154,6 +163,7 @@ static void test_wheel() {
     w2.set_cmd(100.0f);
     w2.update(0.01f);
     w2.stop();
+    CHECK(w2.effort() == 0);                 // 空回调：不崩，且 stop 后仍是 0
 }
 
 int main() {

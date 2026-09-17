@@ -1,7 +1,7 @@
 // example_wheel.cpp —— 电机模型闭环仿真（L3 级验证，"看得见"的部分）
 //
 // 链路：Wheel.set_cmd(1000) → update → measure_speed 回调读 MotorModel
-//       → PID 输出 PWM → set_pwm 回调喂回 MotorModel（一阶惯性）
+//       → PID 输出 effort → set_effort 回调喂回 MotorModel（一阶惯性）
 // 锚点：0.7s 内收敛 ±5%（950~1050），无超调
 //
 // 单位说明：本示例数值单位 = rpm（legacy 参考单位）；Wheel 接口本身单位无关。
@@ -9,25 +9,31 @@
 
 #include <cstdio>
 
+// 命名空间（2026-09-17）：全仓类型收进 lunokhod::（规则见 AGENTS.md §3）
+using namespace lunokhod::wheel;
+using namespace lunokhod;
+
+
+
 // 电机模型：PWM → rpm 一阶惯性（模拟真实电机动态）
 // 满 PWM=3600 → 目标 3000rpm；时间常数 T=100ms
 struct MotorModel {
     float rpm = 0.0f;
     float T = 0.1f;
-    void step(float pwm, float dt) {
-        float target = pwm / 3600.0f * 3000.0f;
+    void step(float effort, float dt) {
+        float target = effort / 3600.0f * 3000.0f;
         rpm += (target - rpm) * dt / (T + dt);
     }
 };
 
 // 真机回调形态：全局函数 + motor_id（电机库惯例，无捕获）
 static MotorModel g_motor;
-static int16_t g_last_pwm = 0;
+static int16_t g_last_effort = 0;
 static float measure_speed(uint8_t id, float dt) { (void)id; (void)dt; return g_motor.rpm; }
-static void   set_pwm(uint8_t id, int16_t pwm)   {
+static void   set_effort(uint8_t id, int16_t effort)   {
     (void)id;
-    g_last_pwm = pwm;
-    g_motor.step((float)pwm, 0.01f);    // 电机模型固定 1kHz 时间步（PWM 回调不带 dt，控制周期由上层固定）
+    g_last_effort = effort;             // 本示例的平台：effort 直连 PWM 占空（±3600）
+    g_motor.step(static_cast<float>(effort), 0.01f);   // 电机模型固定 1kHz 时间步（回调不带 dt，周期由上层固定）
 }
 
 int main() {
@@ -43,12 +49,12 @@ int main() {
     SmoothPlannerConfig pc;
     pc.max_rate_ = 5000.0f;      // 加速爬满（0.2s），电机惯性 T=0.1s 是主要滞后
     pc.Tf_       = 0.02f;
-    Wheel w(0, pc, cfg, measure_speed, set_pwm);
+    Wheel w(0, pc, cfg, measure_speed, set_effort);
 
     const float DT = 0.01f;               // 1kHz 控制周期
     w.set_cmd(1000.0f);                   // 目标 1000 rpm
 
-    printf("t(s)     rpm     PWM\n");
+    printf("t(s)     rpm  effort\n");
     printf("------ ------- -------\n");
     int converge_frame = -1;
     float max_rpm = -1e9f;
@@ -59,7 +65,7 @@ int main() {
         if (rpm > max_rpm) max_rpm = rpm;
         if (converge_frame < 0 && rpm >= 950.0f && rpm <= 1050.0f) converge_frame = i;
         if (i % 20 == 0 || i == 1)
-            printf("%5.2f  %7.1f  %7d\n", i * DT, rpm, g_last_pwm);
+            printf("%5.2f  %7.1f  %7d\n", static_cast<float>(i) * DT, rpm, g_last_effort);
     }
 
     printf("------ ------- -------\n");

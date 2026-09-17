@@ -1,68 +1,46 @@
 #pragma once
 
-#include "chassis.hpp"
 #include "contracts.hpp"
 #include "odometry.hpp"
 #include "twist_acc_limiter.hpp"
-#include "wheel.hpp"
 #include <cstdint>
+namespace lunokhod::chassis_loop {
+
 
 struct ChassisLoopConfig {
     // --- Twist Acc limiter ---
     float acc_vx_ = 1.5f;
     float acc_vy_ = 1.5f;
     float acc_wz_ = 4.0f;
-    // --- Wheel Control ---
-    PIDConfig pid_{};
-    SmoothPlannerConfig planner_{};
-    // --- Odometry ---
+    // --- odometry ---
     float twist_scale_ = 1.0f;
 };
 
-template <typename Chassis>
+template <typename ActuatorSet>
 class ChassisLoop {
 public:
-    using MeasureSpeedFn = float (*)(uint8_t wheel_id, float dt);
-    using SetPwmFn = void (*)(uint8_t wheel_id, int16_t pwm);
-
-    // --- external chassis injection ---
-    ChassisLoop(const ChassisLoopConfig& cfg, const Chassis& chassis, MeasureSpeedFn measure_speed, SetPwmFn set_pwm)
-        : chassis_(chassis), limiter_(cfg.acc_vx_, cfg.acc_vy_, cfg.acc_wz_), odom_(cfg.twist_scale_),
-          w0_(0, cfg.planner_, cfg.pid_, measure_speed, set_pwm),
-          w1_(1, cfg.planner_, cfg.pid_, measure_speed, set_pwm),
-          w2_(2, cfg.planner_, cfg.pid_, measure_speed, set_pwm),
-          w3_(3, cfg.planner_, cfg.pid_, measure_speed, set_pwm),
-          w4_(4, cfg.planner_, cfg.pid_, measure_speed, set_pwm),
-          w5_(5, cfg.planner_, cfg.pid_, measure_speed, set_pwm),
-          wheels_{ &w0_, &w1_, &w2_, &w3_, &w4_, &w5_ } {}
+    ChassisLoop(const ChassisLoopConfig& cfg, const ActuatorSet& actuators)
+        : actuators_(actuators), limiter_(cfg.acc_vx_, cfg.acc_vy_, cfg.acc_wz_), odom_(cfg.twist_scale_) {}
 
     // ----- upstream interface -----
     void set_cmd(const Twist& cmd) { t_cmd_in_ = cmd; }
     // ----- odom record sink -----
-    void set_sink(SampleSink sink, void* ctx = nullptr) { odom_.set_sink(sink, ctx); }
+    void set_sink(odometry::SampleSink sink, void* ctx = nullptr) { odom_.set_sink(sink, ctx); }
     // ----- heartbeat tick -----
     void tick(float dt, uint32_t now) {
         // --- limiter ---
-        t_cmd_final_ = limiter_.limit(t_cmd_in_, dt).out_;
+        lim_res_ = limiter_.limit(t_cmd_in_, dt);
+        t_cmd_final_ = lim_res_.out_;
         // --- inverse to ws ---
-        ws_target_ = chassis_.inverse_kinematics(t_cmd_final_);
-        // 容量 = 契约容量（WheelSpeeds.values_[6]）；活跃数由底盘说了算
-        const uint8_t wn = ws_target_.count_;
-        for (uint8_t i = wn; i < 6; ++i) { ws_target_.values_[i] = 0.0f; }
-        // --- push down & actuator ---
-        for (uint8_t i = 0; i < wn; ++i) {
-            wheels_[i]->set_cmd(ws_target_.values_[i]);
-            wheels_[i]->update(dt);
-        }
+        ws_target_ = actuators_.inverse(t_cmd_final_);
+        // --- push down + execute ---
+        actuators_.apply(ws_target_, dt);
         // --- measure ---
-        WheelSpeeds meas{};
-        meas.count_ = wn;
-        for (uint8_t i = 0; i < wn; ++i) { meas.values_[i] = wheels_[i]->get_speed(); }
+        ws_meas_ = actuators_.measure(ws_target_);
         // --- forward to twist ---
-        twist_meas_  = chassis_.forward_kinematics(meas);
+        twist_meas_  = actuators_.forward(ws_meas_);
         // --- odom integral to pose ---
-        // --- process to res残差 ---
-        odom_.update(twist_meas_, dt, now, t_cmd_final_, &meas);
+        odom_.update(twist_meas_, dt, now, t_cmd_final_, &ws_meas_);
     }
 
     // ----- getters -----
@@ -70,19 +48,22 @@ public:
     float yaw_odo() const { return odom_.yaw_ref(); }
     Twist twist() const { return twist_meas_; }
     Twist cmd() const { return t_cmd_final_; }
-    float wheel_speed(uint8_t i) const { return wheels_[i]->get_speed(); }
+    twist_acc_limiter::LimitResult limit_result() const { return lim_res_; }
+    float wheel_speed(uint8_t i) const { return ws_meas_.values_[i]; }
     float wheel_target(uint8_t i) const { return ws_target_.values_[i]; }
+    int16_t wheel_effort(uint8_t i) const { return actuators_.effort(i); }  // 最近一次 tick() 后该轮算出的 effort
 
 private:
-    Chassis chassis_;
-    TwistAccLimiter limiter_;
-    Odometry odom_;
-
-    Wheel w0_, w1_, w2_, w3_, w4_, w5_;
-    Wheel* wheels_[6];
+    ActuatorSet actuators_;
+    twist_acc_limiter::TwistAccLimiter limiter_;
+    twist_acc_limiter::LimitResult lim_res_{};       ///< 带 {}：默认初始化也要是"零值"，不是脏值
+    odometry::Odometry odom_;
 
     Twist t_cmd_in_{ 0.0f, 0.0f, 0.0f };            ///< upstream cmd
     Twist t_cmd_final_{ 0.0f, 0.0f, 0.0f };         ///< actual twist push down
     WheelSpeeds ws_target_{};                                    ///< inverse result target
+    WheelSpeeds ws_meas_{};
     Twist twist_meas_{ 0.0f, 0.0f, 0.0f };          ///< forward output
 };
+
+}  // namespace lunokhod::chassis_loop

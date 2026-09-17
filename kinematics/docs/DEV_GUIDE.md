@@ -5,6 +5,8 @@ accepted: false
 ---
 > **类：D 施工单（临时物）** —— 阶段 1~3 已完成，阶段 4~5 未开工。**验收后进 trash/**；代码本身才是唯一源。
 > 文档体系与写作规则：../../docs/README.md
+> **命名空间（2026-09-17）**：本文档里的类型名**省略 `lunokhod::` 前缀** —— 例：`MecanumDrive` 即
+> `lunokhod::kinematics::MecanumDrive`，`Twist` 即 `lunokhod::Twist`（规则见 [`AGENTS.md`](../../AGENTS.md) §3.1）。
 
 # Kinematics 开发指南（伪代码版）
 

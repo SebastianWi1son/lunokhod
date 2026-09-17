@@ -15,6 +15,11 @@
 #include <cstdio>
 #include <cstring>
 
+// 命名空间（2026-09-17）：全仓类型收进 lunokhod::（规则见 AGENTS.md §3）
+using namespace lunokhod;
+using namespace lunokhod::odometry;
+
+
 namespace {
 
 // sink 实现：ctx 带的是 FILE*

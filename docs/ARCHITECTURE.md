@@ -21,15 +21,19 @@ generated: false
 
 **判据：每层只回答一个“吃什么、吐什么”。** 目录名必须看得出它属于哪一层。
 
-| 层 | 吃什么 → 吐什么 | 目录 | 为什么在这一层 |
-|---|---|---|---|
-| **编排** | 已算好的量（`Twist` / `dt` / `now`）→ 每拍顺序 + 时间基 | `chassis_loop/` | 它只搬运和排列，不含算法 |
-| **指令整形** | `Twist` → `Twist` | `command/twist_acc_limiter/` | 在**逆解之上** —— 它约束的是车体三量，不是单轮 |
-| **坐标变换** | `Twist` ↔ 轮速 | `kinematics/` | 瞬时映射，无状态 |
-| **积分与记录** | 轮速 → 位姿 + 逐拍记录 | `odometry/` | 有状态 |
-| **执行器** | 目标转速 → effort（±1000） | `actuator/wheel/` | 在**逆解之下** —— 它不知道车体 |
-| **驱动 / HAL** | effort → PWM / 电流 / 编码器 | 固件侧（不在本仓） | FOC 的电流环就住这里 |
-| **数据契约** | 贯穿所有层 | `contracts/` | 谁都能 include，它不依赖谁 |
+| 层 | 吃什么 → 吐什么 | 目录 | **命名空间** | 为什么在这一层 |
+|---|---|---|---|---|
+| **编排** | 已算好的量（`Twist` / `dt` / `now`）→ 每拍顺序 + 时间基 | `chassis_loop/` | `lunokhod::chassis_loop` | 它只搬运和排列，不含算法 |
+| **指令整形** | `Twist` → `Twist` | `command/twist_acc_limiter/` | `lunokhod::twist_acc_limiter` | 在**逆解之上** —— 它约束的是车体三量，不是单轮 |
+| **坐标变换** | `Twist` ↔ 轮速 | `kinematics/` | `lunokhod::kinematics` | 瞬时映射，无状态 |
+| **积分与记录** | 轮速 → 位姿 + 逐拍记录 | `odometry/` | `lunokhod::odometry` | 有状态 |
+| **执行器** | 目标转速 → effort（±1000） | `actuator/wheel/` | `lunokhod::wheel` | 在**逆解之下** —— 它不知道车体 |
+| **驱动 / HAL** | effort → PWM / 电流 / 编码器 | 固件侧（不在本仓） | （固件自己的根） | FOC 的电流环就住这里 |
+| **数据契约** | 贯穿所有层 | `contracts/` | **`lunokhod::` 根**（跨层公共词汇） | 谁都能 include，它不依赖谁 |
+
+> **命名空间 = 目录（2026-09-17 定案）**：全仓一个根 `lunokhod::`，子命名空间 = 组件名；
+> **跨层共享的数据类型**（`Twist` / `WheelSpeeds` / `Pose`）放**根** —— 它们不属于任何一层。
+> 与 `foucault` 的 **F10** 同构（那边是 `foucault::math` / `solver` / `measure`）。规则见 [`../AGENTS.md`](../AGENTS.md) §3.1。
 
 > **为什么把 `control/` 拆掉**（2026-09-16）：原来的 `control/` 把**指令整形**（在逆解之上）
 > 与**执行器**（在逆解之下）放在同一个目录 —— 两层被压成一层，新人无法从目录看出

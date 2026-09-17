@@ -4,6 +4,9 @@ generated: false
 ---
 # lunokhod
 
+> **状态：已冻结（2026-09-17）** —— 库本体（六个组件）冻结供**下游**（固件 / 平台层）消费。
+> 下游接入看 [`docs/INTEGRATION.md`](docs/INTEGRATION.md)；解冻须知与开放项看 [`docs/log/HANDOFF.md`](docs/log/HANDOFF.md) 的「冻结快照」。
+
 嵌入式底盘控制系统 —— **手写重构项目**：把 2024 年的 C 语言巡线代码，逐个重构成可复用、可测试的 C++17 组件。
 
 - 每个组件：**零依赖**、能直接拖进 STM32 工程、带行为锚点测试
@@ -62,7 +65,7 @@ contracts ← twist_acc_limiter    wheel（谁都不依赖）
 
 ```bash
 cmake -S . -B build && cmake --build build -j
-ctest --test-dir build --output-on-failure          # 8 个测试
+ctest --test-dir build --output-on-failure          # 9 个测试
 ```
 
 **② 开发者：只搞一个库**
@@ -86,6 +89,10 @@ target_link_libraries(fw PRIVATE kinematics)
 > 引它会连带生成全部组件的测试可执行文件。想要“一键构建”用 ①。
 
 所有 target 都开在 `-Wall -Wextra -Werror`（告警即错误）。
+
+**命名空间**：所有类型都在 **`lunokhod::`** 之下（`lunokhod::kinematics::MecanumDrive` /
+`lunokhod::chassis_loop::ChassisLoop` …），**跨库共享的数据**在根（`lunokhod::Twist` /
+`WheelSpeeds` / `Pose`）。消费方写全限定名，或 `using namespace lunokhod;`。规则见 [`AGENTS.md`](AGENTS.md) §3.1。
 
 ## 推之前先本地跑一遍 CI
 

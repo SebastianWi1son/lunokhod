@@ -129,12 +129,18 @@ jobs:
           EOF
           cat > /tmp/consumer/main.cpp <<'EOF'
           #include "chassis.hpp"
-          #include "chassis_loop.hpp"
+          #include "wheel_set.hpp"          // 执行器组（它自带 chassis_loop.hpp）
           #include "odometry.hpp"
           #include "twist_acc_limiter.hpp"
           #include "wheel.hpp"
+          // 命名空间（2026-09-17）：全仓类型在 lunokhod:: 之下（见 AGENTS.md §3）
+          using namespace lunokhod;                    // Twist / WheelSpeeds / Pose
+          using namespace lunokhod::kinematics;        // MecanumDrive
+          using namespace lunokhod::twist_acc_limiter; // TwistAccLimiter
+          using namespace lunokhod::odometry;          // Odometry
+          using namespace lunokhod::chassis_loop;      // ChassisLoop / WheelSet / WheelLoop
           static float fake_measure(uint8_t wheel_id, float dt) { (void)wheel_id; (void)dt; return 0.0f; }
-          static void  fake_pwm(uint8_t wheel_id, int16_t pwm) { (void)wheel_id; (void)pwm; }
+          static void  fake_effort(uint8_t wheel_id, int16_t effort) { (void)wheel_id; (void)effort; }
           int main() {
               MecanumDrive    chassis(0.10f, 0.12f, 0.03f);
               TwistAccLimiter limiter(1.5f, 1.5f, 4.0f);
@@ -142,9 +148,10 @@ jobs:
               (void)chassis.inverse_kinematics(Twist{0.5f, 0.0f, 0.0f});
               (void)limiter.limit(Twist{0.5f, 0.0f, 0.0f}, 0.001f);
               odom.update(Twist{0.5f, 0.0f, 0.0f}, 0.001f, 1u);
-              // 装配层：被消费时能真用起来
+              // 装配层（接缝版）：被消费时能真用起来
               ChassisLoopConfig cfg;
-              ChassisLoop<MecanumDrive> loop(cfg, chassis, fake_measure, fake_pwm);
+              WheelSetConfig    wcfg;
+              WheelLoop<MecanumDrive> loop(cfg, WheelSet<MecanumDrive>(wcfg, chassis, fake_measure, fake_effort));
               loop.set_cmd(Twist{0.3f, 0.0f, 0.0f});
               loop.tick(0.001f, 2u);
               return (loop.wheel_target(0) > 0.0f) ? 0 : 1;

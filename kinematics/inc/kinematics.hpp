@@ -1,6 +1,8 @@
 #pragma once
 
 #include "contracts.hpp"
+namespace lunokhod::kinematics {
+
 
 constexpr float k2PI = 6.283185307179586f;
 
@@ -19,7 +21,7 @@ public:
 // ----- 翻译官: J 矩阵 x 速度向量, pure matrix calc -----
 template<uint8_t N>
 WheelSpeeds jacobian_apply(const float (&J)[N][3], uint8_t wn, const Twist& t_cmd) {
-    WheelSpeeds out_ws;
+    WheelSpeeds out_ws{};        // ← 零初始化：只填前 wn 个，其余**恒为 0**（不是不确定值）
     out_ws.count_ = wn;
     for (uint8_t i = 0; i < wn; ++i) {       // 循环到 wn（运行时轮数），N 是数组容量
         out_ws.values_[i] = J[i][0] * t_cmd.vx_  // Jacobian Calc
@@ -29,3 +31,4 @@ WheelSpeeds jacobian_apply(const float (&J)[N][3], uint8_t wn, const Twist& t_cm
     return out_ws;
 }
 
+}  // namespace lunokhod::kinematics

@@ -3,6 +3,10 @@
 #include "twist_acc_limiter.hpp"
 #include <cstdio>
 
+// 命名空间（2026-09-17）：全仓类型收进 lunokhod::（规则见 AGENTS.md §3）
+using namespace lunokhod::twist_acc_limiter;
+
+
 static int fails = 0;
 #define CHECK(cond) do { if (!(cond)) { printf("FAIL %s:%d  %s\n", __FILE__, __LINE__, #cond); fails++; } } while (0)
 static bool close(float a, float b) { return (a - b < 1e-5f) && (b - a < 1e-5f); }

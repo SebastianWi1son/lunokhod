@@ -4,6 +4,8 @@ generated: false
 ---
 > **类：C 状态** —— **跟代码变**。⚠️ 与代码天然重复，建议降级为「一屏文件地图 + 追加式变更记录」，见 trash/README.md。
 > 文档体系与写作规则：../../docs/README.md
+> **命名空间（2026-09-17）**：本文档里的类型名**省略 `lunokhod::` 前缀** —— 例：`MecanumDrive` 即
+> `lunokhod::kinematics::MecanumDrive`，`Twist` 即 `lunokhod::Twist`（规则见 [`AGENTS.md`](../../AGENTS.md) §3.1）。
 
 # Kinematics 实现真相文档（以代码为准）
 
@@ -82,7 +84,7 @@ struct Pose {           // 里程计输出：世界系位姿（O3 定案：跨�
 ```cpp
 template<uint8_t N>
 WheelSpeeds jacobian_apply(const float (&J)[N][3], uint8_t wn, const Twist& t_cmd) {
-    WheelSpeeds out_ws;
+    WheelSpeeds out_ws{};        // 零初始化 → 未用到的槽恒为 0（2026-09-17 修：原为不确定值）
     out_ws.count_ = wn;
     for (uint8_t i = 0; i < wn; ++i) {         // 循环到 wn（运行时轮数），N 只是数组容量
         out_ws.values_[i] = J[i][0]*t_cmd.vx_ + J[i][1]*t_cmd.vy_ + J[i][2]*t_cmd.wz_;
@@ -91,7 +93,9 @@ WheelSpeeds jacobian_apply(const float (&J)[N][3], uint8_t wn, const Twist& t_cm
 }
 ```
 
-模板参数 `N` 由数组声明尺寸推导（**数组容量上界**）；`wn` 是运行时有效行数。两者只在 OmniDrive（声明 `J[6][3]`、实际 `wn_` 行）处不相等——循环上界必须用 `wn`，否则读写未初始化的 `J[3..5]` 行。（2026-09-13 已修复，见 §8-P1）
+模板参数 `N` 由数组声明尺寸推导（**数组容量上界**）；`wn` 是运行时有效行数（diff=2 / mec=4）。
+**OmniDrive 自 2026-09-17 起把轮数提成模板参数 `OmniDrive<N>`**：数组界与循环上界都是 `N`，
+本段原来那个「两个数不相等」的坑**结构上不再存在**（见 §8-P7）。
 
 ## 5. 三种底盘（以代码为准的数学）
 
@@ -130,7 +134,10 @@ wz =  r(−FL+FR−RL+RR)/(4(lx+ly))
 
 ### 5.3 OmniDrive（inc/drive_omni.hpp）—— ⚠ 符号约定与 DESIGN.md 不同
 
-- 构造：`OmniDrive(uint8_t wn, float cr, float gamma, float wr)`（轮数、轮心距 R、首轮偏移角 γ、轮半径 r）。
+- 构造：`OmniDrive<N>(float cr, float gamma, float wr)` —— **轮数 N 是模板参数**（编译期，2026-09-17 定案）；
+  运行期给的三个量是轮心距 R、首轮偏移角 γ、轮半径 r。
+  `static_assert(N >= 3 && N <= 6)`（上限 = `WheelSpeeds` 契约容量）→ **非法轮数写不出来**；
+  对应的**反例编译测试**在 `test/compile_fail/omni_over_capacity.cpp`（CMake 配置阶段校验它必须编不过）。
 - 逆运动学（**代码实际采用**，θᵢ = i·2π/wn + γ）：
 
 ```
@@ -179,7 +186,10 @@ wz = Σuᵢ / (N·R)
 - **P2（功能缺口）✅ 已修复 2026-09-13**：`drive_omni.hpp` `forward_impl` 硬编码 3 轮 γ=0，`wn_`/`gamma_` 未使用，`wn>3` 输出错误且无断言。→ 已改为通用 N 轮伪逆（含 γ）。
 - **P3（构建缺口）✅ 已修复 2026-09-13**：`examples/simulation_demo.cpp` 没有 CMake target。→ 已挂 `simulation_demo` target（`-Werror`，编译通过、运行退出码 0）。
 - **P4（不一致）✅ 已修复 2026-09-13**：`example_diff` target 未加 `-Wall -Wextra -Werror`。→ 已补齐。
-- **（新增）P7（未开工）** OmniDrive 构造无参数校验：`J[6][3]` 定长，`wn>6` 越界写、`wn<2` 数学无意义——待加断言/校验（对应根 `../../docs/TODO.md` P12）。
+- **P7 ✅ 已根治（2026-09-17）**：原问题 = 轮数做成运行期参数而写入定长 `J[6][3]`（`wn>6` 越界写、`wn<2` 无意义）。
+  最终改法 = **轮数提成模板参数** `OmniDrive<N>` + `static_assert(N ∈ [3,6])` → 非法轮数**编译期写不出来**，
+  运行期既不越界、也没有「是否合法」这回事；机器验证见 CMake **反例编译测试**
+  （对应根 `../../docs/TODO.md` P12，已闭合）。
 - **P5（风格）** `contracts.hpp` 的 POD 契约成员用尾下划线命名（`vx_`），与"公共契约"语义存在张力；STAGE1_REVIEW 的 struct-POD 讨论未涉及此点。
 - **P6（文档债）** `DESIGN.md` 与 `DEV_GUIDE.md`（2026-09-13 已从根 `docs/` 归位到本目录）未随 STAGE2 命名修正与 STAGE3 移址回改（§7 全部条目）。
 

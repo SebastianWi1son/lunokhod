@@ -232,6 +232,13 @@ generated: false
 
 ### P12. 防御校验 ⬜ 未开工
 - **内容**：OmniDrive 构造 `wn>6` 越界写 `J[6][3]`、`wn<2` 数学无意义——加断言/参数校验；twist_acc_limiter `reset()` 补测试
+- **✅ 已根治（2026-09-17）**：**轮数提成模板参数** `OmniDrive<N>` + `static_assert(N ∈ [3,6])`。
+  三次迭代才到位：① 「夹到 [2,6]」→ 被判定**洗白数据**（7 轮的车被静默按 6 轮建模）❌；
+  ② 「判无效」（`wn_=0` + `is_valid()` + 零输出）→ 仍靠**调用方自觉**，而「用户会不会遵守」= **不会** ❌；
+  ③ **模板参数** → 非法轮数**编译期写不出来** ✅（`wn_` / `is_valid` / 夹紧 / 自检 全部消失）。
+  **机器验证**：`kinematics/test/compile_fail/omni_over_capacity.cpp`（故意 `OmniDrive<7>`）+ CMake
+  `try_compile` —— 它若编得过（= 守卫被删/放宽），**cmake 配置阶段直接失败**（改坏必红，已实测）。
+  调用点 8 处已同步；**KND 仿真输出逐位不变**。
 - **优先级**：🟡 中（2 小时量级）
 
 ### P13. LICENSE + 主观预测 ✅ **已完成（2026-09-14）**
@@ -262,6 +269,28 @@ generated: false
   四档编译零告警、聚合 `ctest` **9/9**、13 个变异全部变红、被消费零泄漏；
   `chassis_loop/docs/IMPL.md`（代码地图）+ 三处组件清单（README / AGENTS §5.1 / ARCHITECTURE §2）已同步；
   新增 **P23**（`wheel` 的 `-Wconversion` 隐式转换，验收时撞到）
+- 2026-09-17：**通用框架（执行器组接缝）落地** —— 装配层不再认识底盘与轮子（`DESIGN.md` §5.2 / **D11**）；
+  `measure` 收设定值、执行器组除轮子外无状态（**D12**）。验收：四档零告警 · 聚合 9/9 ·
+  **12 变异全红** · **KND 仿真输出逐位相同**（隔离副本，md5 `9ab64f43…`）。
+  上游 `ctlkit` v0.1.1 已 vendor（`SetPwmFn`→`SetEffortFn` 起步）；下游 KND 按决定不动 → **P30**
+- 2026-09-17（收尾）：**P25 闭合**（用户手敲 `lim_res_` / `limit_result()` / `t_cmd_final_ = lim_res_.out_`；
+  第一版多留一行导致 `limit()` 每拍被调两次 → 加速度上限翻倍，测试红 39 条，已修并复验）；
+  **P12 根治**（`OmniDrive<N>` 模板参数 + `static_assert` + **CMake 反例编译测试**，改坏必红）；
+  顺手修 `jacobian_apply` 未初始化（`WheelSpeeds out_ws{}`）→ **未用到的槽恒为 0**（F1 同步改写）。
+  **lunokhod 进入冻结**：见 `log/HANDOFF.md` 的"冻结快照"。
+- 2026-09-17（外部复核）：3 条 —— ① 编译失败（`kMinWheels=3` 与 `2..6` 文案 / `<2>` 测试脱节）**当轮已修**，再根治为「文案不含数字 + **上下界各一个反例编译测试**」（`<2>` 与 `<7>` 都必须编不过）；② `lim_res_` **少写 `{}`** → 真 UB，已修并给 `LimitResult` 补**默认成员初始化器**；③ 补上 P25 缺失的测试（第 10 组：首次 tick 前零值 / 阶跃后饱和标志 / 与 `cmd()` 一致）。
+- 2026-09-17（下午）：**外部 agent 的 13 条冻结清单逐条核实** —— 10 条属实、3 条不准
+  （P23 的告警数"2 处"实为 1 处；清单 #5"执行器组契约要加口"**不成立**，真身是 P26 的子问题；
+  P29 全局名"8 个"实为 15 个）。更正写进 P23/P26/P29；新增 **P31**（下游接入指南）。
+  冻结前的收尾顺序见 `log/HANDOFF.md` 末尾。
+- 2026-09-17（深夜）：**P32 全仓命名空间政策落地**（用户定 A 案 + 数据放根）。起因：用户发现 P29 只圈了
+  `wheel` 一个组件，而 foucault 有 F10 明文"根 + 层子命名空间" → 现状最不一致。10 个库文件包命名空间，
+  消费方全部跟上；规则进 `AGENTS.md §3.1`，分层表加「命名空间」列。
+  验收：9/9 · 四档零告警 · 全局命名空间已清空（8 个同名全局类型探针）· **KND 逐位不变** · 接入指南真跑。
+- 2026-09-17（晚）：**P29 命名空间 + P26 加口/改名 + P23 显式 cast 全部落地**（AI 做，属"加作用域/改名"类）。
+  `wheel` 的类型收进 `namespace wheel`（15 个全局名消失）；执行器组契约加第 5 个方法 `effort(i)`（**D13**）；
+  `-Wconversion` 严格档全仓零告警。验收：9/9 聚合 · **15/15 变异变红**（含 3 条新口）· 四档零告警 ·
+  消费模式零泄漏 · **KND 仿真输出逐位不变**（md5 `9ab64f43…`）。剩 **P25 + P12** 进施工单 `WORK_FREEZE.md`（已归档 `../trash/`：P25 手敲已核、P12 改模板参数根治）。
 - 2026-09-16（三）：**运动状态暴露的落地准备** ——
   概念定案「**PWM 是数字、不是硬件；边界是「调用 vs 被调用」**」；
   **PID 算法需求归口仓外 `~/Develop/Workspace/pid`**（登记其 `optimization_considerations.md`
@@ -497,7 +526,7 @@ FK(measured_wheel_speeds).wz  −  gyro_z
 - **下一步**：等固件的急停 / 失效保护（缺口 G7）立项时一并定；先定「谁在什么条件下调它」。
 - **优先级**：🟡 中（不阻塞装配层落地）
 
-### P23. `wheel` 在 `-Wconversion` 下有一条隐式转换 ⬜ 待决策（2026-09-16 提出）
+### P23. `wheel` 在 `-Wconversion` 下有一条隐式转换 ✅ **已修（2026-09-17）**
 
 - **来源**：验收 `chassis_loop` 时跑「严格档」撞到的 —— **不是那一批代码的问题**。
 - **现象**：`actuator/wheel/src/wheel.cpp` 的 `set_pwm_(motor_id_, out_pwm)`：`float` → `int16_t` 隐式转换，
@@ -508,6 +537,9 @@ FK(measured_wheel_speeds).wz  −  gyro_z
 - **影响面**：现状**不影响 CI**（各组件自测只用 `-Wall -Wextra -Werror`），但谁想开 `-Wconversion` 编整仓就会卡住。
 - **2026-09-16 补**：**并入 P26 一起修** —— 落 `effort_` 时那两处调用本来就要改
   （`set_pwm_` → `set_effort_` + 显式 `static_cast<int16_t>`），顺手关闭本条。
+- **2026-09-17 核实（外部清单说"2 处"，要纠正）**：调用点**确实是 2 处**（`Wheel::update` 里
+  的正常下发 + 停机那处的 `0.0f`），但**只有 1 处真告警** —— 常量 `0.0f` 不触发
+  `-Wfloat-conversion`（实测整仓严格档只报这一条）。修的时候两处都显式 `cast`，但别指望它变 2 条告警。
 - **优先级**：🟢 低（一行的事，属「跨组件一致性」）
 
 ### P24. 装配层的轮子容量 < 契约容量 → 越界 ✅ **已修（2026-09-16）**
@@ -531,7 +563,7 @@ FK(measured_wheel_speeds).wz  −  gyro_z
 
 ## 2026-09-16 新增（PID 归口 + 运动状态暴露）
 
-### P25. 装配层暴露限幅饱和标志（`LimitResult` 被丢弃）🟡 待手敲（2026-09-16 提出）
+### P25. 装配层暴露限幅饱和标志（`LimitResult` 被丢弃）✅ **已做（2026-09-17）**
 
 - **内容**：`chassis_loop::tick()` 里 `t_cmd_final_ = limiter_.limit(t_cmd_in_, dt).out_;` —— **只取输出**，
   `LimitResult` 的 `is_vx_lim_` / `is_vy_lim_` / `is_wz_lim_` 三个标志**算完就丢**。
@@ -547,10 +579,12 @@ FK(measured_wheel_speeds).wz  −  gyro_z
 - **顺手**：`tick()` 里那行残留注释 `// --- process to res残差 ---`（它下面实际是 `odom_.update`）——
   删掉，或改成「此处不留残差，残差在库外」。
 - **不用改** `twist_acc_limiter` —— 它**已经交了** `LimitResult`，问题只在装配层没接。
+- **与接缝的关系（2026-09-17）**：接缝落地后，`tick()` 里那行 `limiter_.limit(...)` 改叫
+  `t_cmd_final_ = limiter_.limit(t_cmd_in_, dt).out_;` —— **位置没变**，照原计划 3 处即可。
 - **测试**：AI 写（判别力：故意不接 `lim_res_` → 标志恒 false → 必须变红）。
 - **优先级**：🟡 中（3 行改动、零风险；是 P19 采数据的字段之一）
 
-### P26. 轮级「努力度」（effort）暴露 + `SetPwmFn` 命名中性化 🟡 建议进 v0.2.0（2026-09-16 提出）
+### P26. 轮级「努力度」（effort）暴露 + `SetPwmFn` 命名中性化 ✅ **已做（2026-09-17）**
 
 - **背景**：分类打滑/堵转需要**三元组** `目标 / 实测 / 努力度`。前两个装配层已有
   （`wheel_target(i)` / `wheel_speed(i)`），**第三个没有出口** —— `Wheel::update()` 里 `out_pwm`
@@ -586,6 +620,20 @@ FK(measured_wheel_speeds).wz  −  gyro_z
 - **时机**：**不单独发版** —— 与 **P11**（0 语义）+ **P23**（-Wconversion）+ effort 一起进 **wheel v0.2.0**，
   一次版本跳变解决四件事。**现在只有 3 个引用文件，是改名最便宜的时候**（引用点只会越来越多）。
 - **测试**：AI 写（判别力：故意不存 `effort_` → getter 恒 0 → 必须变红）。
+- **进度（2026-09-17）**：**类型别名已改**（`SetPwmFn` → `SetEffortFn`，`wheel.hpp`/`wheel.cpp` + 接缝的
+  `wheel_set.hpp` 都用了新名）；**剩下**：`float effort() const` + `effort_` 成员 + 调用点局部变量名
+  `set_pwm` → `set_effort` + 装配层 `wheel_effort(i)`。已实测：改名**没有破坏任何目标**
+  （`test_wheel` / `example_wheel` / 其余组件全过；下游 `hal::set_pwm` 是位置传参、不用动）。
+- **⚠ 子问题（2026-09-17 立）**：装配层要不要出 `wheel_effort(i)`？
+  **现状够用**：`wheel_speed(i)` / `wheel_target(i)` 读的是装配层**自己的**两份 `WheelSpeeds`
+  缓存，**不需要**执行器组的 `wheels_`（它 private 也不影响）—— 所以**不是**"契约缺个口"。
+  真问题是：`effort` 这种东西**不在** `WheelSpeeds` 里，装配层**永远拿不到**。
+- **✅ 决定（2026-09-17，用户拍板）**：**加口** —— 执行器组契约第 5 个方法 `int16_t effort(uint8_t i) const`
+  （决策 **D13**），装配层出 `wheel_effort(i)`。理由：下游构建期就要单轮状态暴露。
+  实现落点：`wheel::Wheel::effort()` + `WheelSet::effort(i)` + `ChassisLoop::wheel_effort(i)`。
+- **✅ 同批做完**（改名 + effort + P23 的显式 cast，隔离副本上 KND 输出**逐位不变**）：
+  `SetEffortFn set_effort` / `set_effort_` / `out_effort` / `effort_` / `effort()`；
+  `float→int16_t` 全部显式 `static_cast`（`-Wconversion` 零告警）；示例的 `set_pwm` 回调 → `set_effort`。
 - **优先级**：🟡 中（P19 的前置之一；改名本身不紧急，但拖延变贵）
 
 ---
@@ -604,6 +652,8 @@ FK(measured_wheel_speeds).wz  −  gyro_z
   - **FOC 自带速度环**（对外只收「速度模式」）：它替换的是「轮控」那一格 →
     写一个 `FocSet` 实现执行器组契约（[`../chassis_loop/docs/DESIGN.md`](../chassis_loop/docs/DESIGN.md) §5.2），
     **装配层一个字不改**。
+- **接缝已落地（2026-09-17）**：`ActuatorSet` 契约见 `chassis_loop/docs/DESIGN.md` §5.2（决策 **D11**）——
+  届时照它写一个 `FocSet` 插进 `ChassisLoop<FocSet>` 即可，装配层不动。
 - **要定的第一件事**：**速度环放在哪一层**（`Wheel` 里 / FOC 驱动里）—— 它决定要不要 `FocSet`。
 - **与 P7（FOC 重构）相邻**；素材：`cyclotron`（FOC 项目，已冻结）。
 - **优先级**：🟢 低（等真做 FOC 接入）
@@ -616,14 +666,19 @@ FK(measured_wheel_speeds).wz  −  gyro_z
 - **要一起动的四处（同一次改动，先改设计）**：① `contracts` 新增模块级契约
   ② `kinematics` 的 Swerve 实现 ③ `odometry` 的记录字段 ④ 执行器组的
   `Setpoints` / `Feedbacks` 类型别名（`DESIGN.md` §5.2 现在**有意**把它们钉在 `WheelSpeeds`）。
-- **接缝的形状不用改** —— 这正是 **D11** 抽对了的证据。
+- **接缝的形状不用改** —— 这正是 **D11** 抽对了的证据（接缝已于 2026-09-17 落地）。
 - **优先级**：🟢 低（等 Swerve 立项，见 P21）
 
 ## 2026-09-17 新增（上游算法库接入）
 
-### P29. `wheel` 组件加命名空间（接口卫生）⬜ 待做 —— 属下一个破坏性发布
+### P29. `wheel` 组件加命名空间（接口卫生）✅ **已做（2026-09-17）→ 已被 P32 推广到全仓**
 - **内容**：`actuator/wheel/inc/{pid,lpf,ramp,smooth_planner}.hpp` 里的类型**全在全局命名空间**
-  （`PID` / `PIDConfig` / `LPF` / `Ramp` / `SmoothPlanner`）—— 谁 include，谁被注入 8 个全局名。
+  （`PID` / `PIDConfig` / `LPF` / `Ramp` / `SmoothPlanner`）—— 谁 include，谁被注入全局名。
+  实测**共 15 个**（外部清单写"8 个"，只数了 `pid.hpp` 一家）：
+  **转发名 11** = `pid.hpp` 8 个（`PID` / `PIDConfig` / `PIDGains` / `PIDLimits` / `PIDTunings` /
+  `PIDState` / `PIDStatus` / `PIDPorts`）+ `lpf.hpp` `LPF` + `ramp.hpp` `Ramp` +
+  `smooth_planner.hpp` `SmoothPlanner`；**`wheel` 自有名 4** = `Wheel` / `SmoothPlannerConfig` /
+  `MeasureSpeedFn` / `SetEffortFn`。
 - **危害**（不是「代码坏了」，是接口债）：
   1. 名字太通用 → 消费方自己定义一个 `PID` 就撞名；「一边 `using` 一边在别处自己定义」会落到 **ODR 隐患**（不报错的那种）
   2. 头文件污染全局命名空间
@@ -634,4 +689,71 @@ FK(measured_wheel_speeds).wz  −  gyro_z
   （全局 `using` → `namespace wheel { using ctl::PID; … }`），或干脆让消费方直接写 `ctl::PID` 并删掉转发头；
   消费方漏改会被编译器逐条点名（不静默）。
 - **影响面**：`wheel.hpp` / `chassis_loop` / `fw_poc` / `KND_Trial` 的限定名；破坏性变更 → 建议与 P26 同批进 wheel 的下一次发布
+- **✅ 已做（2026-09-17，趁下游未开工）**：15 个全局名全部收进 `namespace wheel`；
+  4 个转发头里的**过期注释**（原文写着"保留全局名"）同批改掉；调用点：`wheel_set.hpp`（限定名）、
+  两个测试与示例（文件内 `using`）、CI 消费示例、`docs/INTEGRATION.md` 示例。
+  反向验证：写一个"全局再定义 `PID`/`Wheel`/`LPF`/`Ramp`"的探针，不再撞名。
+- **⚠ 载体问题**：`wheel` 组件**没有 B 类设计文档**（只有教训日志 `docs/log/WHEEL_LESSONS.md`），
+  所以"类型在 `wheel::` 里"这条约定目前记在 `chassis_loop/docs/DESIGN.md` §5.2 与 `docs/INTEGRATION.md` §2。
+  将来若给 `wheel` 补 `docs/DESIGN.md`，把这条连同 `LPF`/`Ramp`/`SmoothPlanner` 的对外约定一起搬过去。
 - **优先级**：🟢 低（不急，但趁转发头还在时改动面最小）
+
+### P31. 下游接入指南（一份完整调用）🟡 **待做**（2026-09-17 提出）
+
+- **缺什么**：五个库各自有测试与 `examples/`，但**装配层没有端到端示例，也没有"平台层要实现什么"的说明**。
+  要接下游（固件 / 别的项目）的人拿到 `chassis_loop` 之后，**没有一份可照抄的完整装配**：
+  ① `MeasureSpeedFn` / `SetEffortFn` 的语义与单位（谁负责符号与量程）② 怎么选底盘、怎么组 `WheelSet`
+  ③ 主循环怎么写（`dt` 从哪来、`now` 从哪来）④ 数据怎么导出（`SampleSink`）⑤ 姿态怎么接（foucault 只管标量）
+  ⑥ 常见坑（未用到的轮子不许被碰、`count_` 的边界、单位/符号约定）。
+- **为什么不做成组件内的 `examples/`**：它不是"这个库怎么用"，是**"整条链怎么装起来"** ——
+  跨 5 个库 + 姿态库，属于**仓级**文档（放 `docs/`），不是组件文档。
+- **判据（写没写够）**：一个没读过本仓的人，照着它能在 STM32 上把 `tick()` 跑起来。
+- **状态（2026-09-17）**：已起草 `../docs/INTEGRATION.md`（示例代码**真编译并跑过**）。
+- **优先级**：🟡 中（转战下游前完成）
+
+---
+
+### P32. 全仓命名空间政策（A 案）✅ **已落地（2026-09-17）**
+
+- **来源**：用户发现 P29 的范围圈得太窄 —— foucault 有**明文决策 F10**（根 `foucault::` + 按层子命名空间），
+  而 lunokhod 只给 `wheel` 一个组件加了命名空间、其余全在全局 → **一半全局一半 `wheel::`，是最不一致的状态**。
+- **定案（用户拍板 A + 数据放根）**：
+
+  | 名字 | 命名空间 |
+  |---|---|
+  | `Twist` / `WheelSpeeds` / `Pose`（跨库公共词汇） | **`lunokhod::` 根** |
+  | 底盘几何 | `lunokhod::kinematics` |
+  | 里程计与记录 | `lunokhod::odometry` |
+  | 限幅 | `lunokhod::twist_acc_limiter` |
+  | 轮控 | `lunokhod::wheel` |
+  | 编排 / 执行器组 | `lunokhod::chassis_loop` |
+
+- **理由**：与 foucault F10 一致；**根名防撞名**（消费方自己的 `kinematics::` 不会撞）；上层一眼看出类型归属。
+- **落地内容**：10 个库文件包命名空间（**内部引用不逐处加前缀**，靠外层查找）· 跨组件引用写兄弟子命名空间
+  （`odometry::SampleSink` / `twist_acc_limiter::TwistAccLimiter`）· 消费方（测试/示例/工具/CI 示例/接入指南）用 using。
+- **规则写进** [`../AGENTS.md`](../AGENTS.md) **§3.1**（唯一来源）+ [`ARCHITECTURE.md`](ARCHITECTURE.md) §0.1 分层表加了「命名空间」列。
+- **验收**：聚合 9/9 · 四档零告警 · 全局命名空间**已清空**（探针：全局再定义 8 个同名类型可共存）·
+  **KND 仿真输出逐位不变**（md5 `9ab64f43…`）· 接入指南示例走 CMake 链真编真跑。
+- **优先级**：✅ 已闭合（趁下游未开工，与 P29 同一个窗口）
+
+---
+
+### P30. 上游破坏性改动后，外仓消费方没有自动化核对 ⬜ **待做**（2026-09-17）
+
+- **怎么发现的**：`ctlkit` v0.1.1 把 `PIDConfig` 改成 `gains_/limits_/tunings_` 三段后，
+  **KND_Trial 的 `app.hpp` 直接编译不过**（还在用旧扁平字段 `p.kd_ = …`）。
+  lunokhod 自己的 5 个 job 全绿 —— 因为 **KND_Trial 在库外，且尚未提交任何 commit**。
+- **当前状态（2026-09-17）**：**未修** —— 用户决定「只改 lunokhod，先不管下游」。
+  修法很小：那 10 行 `[](){…}()` 换成一处具名链式调用（`PIDConfig{}.kp(8.0f).ki(1.2f)…`，数值不动）。
+- **风险同类**：任何「下游只改调用点」的上游迁移（ctlkit 升版、契约改名、`SetPwmFn`→`SetEffortFn`）
+  都会重演这一幕：**库内绿、库外断**。
+- **2026-09-17 补：下游有两个**（都在库外、都未提交）—— `KND_Trial`（3 个文件）与
+  `~/Develop/Workspace/fw_poc/`（1 个文件）。**全仓命名空间（P32）又是一次同类破坏**：
+  两个下游都要加 `lunokhod::` 限定。**核对清单第 2 条要跑两遍**。
+- **选项**：① 每次上游迁移后**人工跑一次** KND sim 构建 + 锚点比对（约 1 分钟，最省）
+  ② 给 KND_Trial 建仓并加一个「消费 lunokhod main」的 CI job（跨仓，成本高）
+  ③ 在 `third_party/ctlkit/VERSION` 的「校验」一行旁补一条「下游手动核对清单」
+- **建议**：先 ① + ③（把动作写进文档，不建跨仓 CI）。
+- **2026-09-17 部分落地**：③ 已做 —— 核对清单写进了 `third_party/ctlkit/VERSION` 的「下游核对」
+  一节（含"库内绿 ≠ 库外能编"的逐条动作 + 锚点比对）。① 仍需每次迁移后人工跑一次。
+- **优先级**：🟡 中（每次上游迁移都会踩）

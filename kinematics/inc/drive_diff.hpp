@@ -1,6 +1,8 @@
 #pragma once
 
 #include "kinematics.hpp"
+namespace lunokhod::kinematics {
+
 
 // ----- 实现层: Drive Differential -----
 class DiffDrive : public Kinematics<DiffDrive> {
@@ -30,8 +32,4 @@ private:
     float r_;       // radius (m)
 };
 
-
-
-
-
-
+}  // namespace lunokhod::kinematics

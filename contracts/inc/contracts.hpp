@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+namespace lunokhod {
+
 
 // ----- Injection -----
 struct Twist {
@@ -17,3 +19,5 @@ struct WheelSpeeds {
 
 // ----- Pose Record -----
 struct Pose { float x_; float y_; float yaw_; };
+
+}  // namespace lunokhod

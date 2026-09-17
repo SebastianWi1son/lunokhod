@@ -400,3 +400,104 @@ void observe_heading(float heading_rad, float trust = 1.0f);
   - ⚠ **门禁坑复现（写文档时踩到）**：把一个仓外路径写进反引号
     （`~/Develop/Workspace/pid/docs/xxx.md`），R5 把其尾段 `docs/xxx.md` 当成**本仓相对路径**报红。
     **解**：跨仓引用用**裸名字**（`optimization_considerations.md`），路径单独写 —— 与本文档 §6「跨仓引用」同一条规矩。
+- **四次追加（2026-09-17）**：**装配层的"通用框架"已落地** —— 中间那一格抽成
+  **执行器组**（`chassis_loop/inc/wheel_set.hpp`，契约 `DESIGN.md` §5.2 / 决策 **D11**），
+  装配层从此**不认识底盘与轮子**。`measure` 收设定值（**D12**）。
+  验收：四档零告警 · 聚合 9/9 · 12 变异全红 · **KND 仿真输出逐位相同**（md5 `9ab64f43…`）。
+  **下游 KND_Trial 按用户决定未动**（它因 ctlkit 迁移编不过，见 `../TODO.md` **P30**）。
+  另：算法原语已 vendor 上游 `ctlkit` v0.1.1（`third_party/ctlkit/`），`SetPwmFn` → `SetEffortFn`（P26 起步）。
+- **五次追加（2026-09-17）**：**外部 agent 的「冻结前 13 条」已逐条核实**（10 条属实 / 3 条不准），
+  更正进了 `../TODO.md`；冻结前的收尾顺序如下（**代码你手敲，文档我善后**）：
+
+  | 批次 | 内容 | 谁 |
+  |---|---|---|
+  | **1** | **P25 限幅饱和标志 + P26 effort/命名中性化 + P23 显式 cast**（同一个文件，一次编完） | **你** |
+  | **2** | **P12 `OmniDrive` 构造校验**（`wn > 6` 会静默踩内存 —— 建议与批次 1 同批） | **你** |
+  | **3** | 文档全部：`DESIGN §5 残留`·`§5.1/§5.2 顺序`·`Swerve 引用 P26→P28`·`ctlkit 下游核对清单`·`P31 接入指南`（已做） | 我 |
+  | **4** | **KND_Trial 两处断点**（扁平 PIDConfig 字段 + 接缝构造签名） | 你 / 下游 |
+  | 推后 | `P29` 命名空间（破坏性，与 P26 同批发版）· `P22` reset 语义（等 G7）· `P19`/G3 残差与融合 | — |
+
+  **三条更正**（原清单错的地方，别照抄）：① P23 的 `-Wconversion` **只有 1 处真告警**（另一处是常量 `0.0f`）；
+  ② 原清单 #5「执行器组契约要加口」**不成立** —— `wheel_speed(i)`/`wheel_target(i)` 读的是装配层自己的缓存，
+  真身是 **P26 的子问题**「要不要 `wheel_effort(i)`」，结论：**先不加**；③ P29 的全局名是 **15 个**不是 8 个。
+  新增 **P31**（下游接入指南）→ 已落地 `../INTEGRATION.md`（示例代码真编译真跑过）。
+- **六次追加（2026-09-17 晚）**：**P29 命名空间 + P26 加口/改名 + P23 显式 cast 全部落地**（AI 做 ——
+  用户判定这三条属"加作用域 / 改名"类机械活）。要点：
+  · `wheel` 的类型收进 **`namespace wheel`** → 15 个全局名消失；消费方写 `wheel::PID` 或自己 `using`。
+    同批把 4 个转发头的**过期注释**改了（原文还写着"保留全局名"）。
+  · 执行器组契约加**第 5 个方法** `int16_t effort(uint8_t i) const`（决策 **D13**）→
+    `wheel::Wheel::effort()` / `WheelSet::effort(i)` / `ChassisLoop::wheel_effort(i)`。
+  · `float→int16_t` 全部显式 `static_cast`（**`-Wconversion` 严格档零告警**）。
+  验收：聚合 9/9 · 四档零告警 · **15/15 变异变红**（含 3 条专测新口）· 消费模式零泄漏 ·
+  `docs/INTEGRATION.md` 的示例**走 CMake 链真编真跑** · **KND 仿真逐位不变**（md5 `9ab64f43…`）。
+  **下一步：只剩 `P25` + `P12` 要你手敲 → 施工单 `docs/WORK_FREEZE.md`。**
+- **七次追加（2026-09-17 深夜）**：**P32 全仓命名空间政策落地**（用户拍板 **A 案**：根 `lunokhod::` +
+  子命名空间 = 组件名；**跨库数据 `Twist`/`WheelSpeeds`/`Pose` 放根**）。起因：用户发现 P29 只圈了
+  `wheel` 一个组件，而 **foucault 有明文决策 F10**（`foucault::` + `math`/`solver`/`measure`）——
+  "一半 `wheel::`、一半全局"是最不一致的状态。
+  · 规则转正到 **`AGENTS.md` §3.1**（唯一来源）；`ARCHITECTURE.md` §0.1 分层表加了「命名空间」列。
+  · 10 个库文件包命名空间；跨组件引用写兄弟命名空间（`odometry::SampleSink`）；消费方（测试/示例/工具/
+    CI 示例/接入指南）跟上；其余组件文档加"本文省略 `lunokhod::` 前缀"的说明。
+  · 验收：聚合 9/9 · 四档零告警 · **全局命名空间已清空**（探针：全局再定义 `Twist`/`Odometry`/`Wheel`/
+    `ChassisLoop` 等 8 个同名类型可共存）· **KND 仿真输出逐位不变**（md5 `9ab64f43…`）。
+  **下一步不变：`P25` + `P12` 两条要你手敲 —— 施工单 `docs/WORK_FREEZE.md` 已按新命名空间更新。**
+- **八次追加（2026-09-17 深夜）**：**P12 与 P25 收口**。
+  · **P25**（限幅饱和标志）：用户手敲，已核 —— `lim_res_` + `limit_result()`，`t_cmd_final_ = lim_res_.out_`
+    （第一版曾**多留一行** → `limit()` 每拍被调两次 → 加速度上限翻倍，测试红 39 条，已修）。
+  · **P12**（`OmniDrive` 轮数）：**三轮迭代才到位** —— 夹住（洗白数据）→ 判无效（靠自觉）→
+    **模板参数 `OmniDrive<N>` + `static_assert`**（非法轮数**写不出来**）。用户授权 AI 直接改 `inc/`。
+    新增 **CMake 反例编译测试**（`test/compile_fail/omni_over_capacity.cpp` + `try_compile`）：
+    守卫被删/放宽 → 配置阶段 FATAL_ERROR（已实测有牙齿）。调用点 8 处已同步。
+  · 验收：聚合 9/9 · 严格档零告警 · 反例测试有效 · **KND 仿真输出逐位不变**（md5 `9ab64f43…`）。
+  · 教训入账：`kinematics/AGENTS.md` **账本第一行**（「能用常量就别用参数」+「别指望自觉，进类型系统或 CI」）。
+
+---
+
+## 🧊 冻结快照（2026-09-17，本文件所在提交 = 冻结点）
+
+**状态**：lunokhod **库本体冻结**，供下游消费（KND_Trial / fw_poc / 下一个产品）。
+下一轮工作的对象是**下游（固件 + 平台层）**，不是本仓。
+
+### 冻结点是什么
+
+| 项 | 值 |
+|---|---|
+| 冻结点 | `main` @ **本文件所在提交**（`git log -1`） |
+| 六个组件 | `contracts` · `kinematics` · `odometry` · `command/twist_acc_limiter` · `actuator/wheel` · `chassis_loop` |
+| 命名空间 | 全仓 `lunokhod::`（`AGENTS.md` §3.1）；跨库数据 `Twist`/`Pose`/`WheelSpeeds` 在根 |
+| 装配接缝 | 执行器组契约（`chassis_loop/docs/DESIGN.md` §5.2，决策 **D11/D12/D13**，**5 个方法**） |
+| 验收凭据 | 聚合 `ctest` **9/9** · 四档编译零告警（Debug/Release/严格档含 `-Wconversion`/ASan+UBSan）· **变异审计全红** · **KND 仿真输出逐位不变** md5 `9ab64f43200d263c8386490ae7d70c09` · `scripts/ci_local.py --clean` 五 job 全绿 |
+| 下游入口 | [`../../docs/INTEGRATION.md`](../../docs/INTEGRATION.md)（平台层两个函数 + 一份能跑通的装配 + 5 个坑） |
+
+### 冻结时**已经知道**的开放项（都不阻塞下游，别当成缺陷）
+
+| 编号 | 是什么 | 何时做 |
+|---|---|---|
+| **P27** | FOC 作为执行器组（接缝已装得下，写一个 `FocSet` 即可） | 真接 FOC 时立项 |
+| **P28** | Swerve：**输出契约要一起扩**（`WheelSpeeds` 装不下「角度+速度」） | Swerve 立项时 |
+| **P30** | 下游是外仓、未提交 → "库内绿、库外断"没有自动核对；`third_party/ctlkit/VERSION` 有核对清单 | 每次上游迁移 |
+| **P22** | 装配层 `reset()` 语义（各积木有 `reset` 但装配层是 private） | 等固件急停/失效保护（缺口 G7） |
+| **P19** | 一致性残差监测（`wz` 残差 = `FK(实测轮速).wz − gyro_z`）；原料已齐（`SampleSink`） | 融合层立项时 |
+| **P12/P23/P24/P25/P26/P29/P32** | ✅ **均已闭合** | — |
+
+### 解冻须知（下次改本仓之前）
+
+1. **先读**：本文件 → `AGENTS.md`（规则/账本）→ `docs/ARCHITECTURE.md` §0.1（层 ↔ 命名空间）→ 目标组件的 `docs/DESIGN.md`（契约权威）。
+2. **破坏性改动仍然很便宜**（下游只有两个未提交的 PoC），但**必须**：先改设计 → 同步测试与代码 → 同步文档，**同一次改动内**完成。
+3. **规矩没变**：`inc/` `src/` `examples/` 用户手写（除明确授权）；`test/` AI 写；文档行号禁止（R3）；提交双段式（`docs/GIT.md`）。
+4. **改完必过**：`python3 scripts/ci_local.py --clean` + `md5` 锚点比对（KND 隔离副本，见 `docs/TODO.md` P30 的核对清单）。
+
+---
+
+## 冻结快照补遗：外部复核（2026-09-17 同日，冻结点之前）
+
+外部 agent 实跑 `scripts/ci_local.py` 后报了 3 条，逐条核实：
+
+| # | 报告 | 核实结果 |
+|---|---|---|
+| 1 | 编译失败（`kMinWheels=3` vs 文案 `2..6` vs 测试 `OmniDrive<2>`） | **曾真实存在**：`kMinWheels` 由用户改成 3 时，文案与测试还是 AI 按 2 写的。当轮已修；**再根治为「文案不含数字 + 上下界各一个反例编译测试」**（`<2>` 与 `<7>` 都必须编不过 → 边界一被放宽，`cmake` 配置阶段就红） |
+| 2 | `lim_res_;` 少 `{}` → 潜在 UB | **属实（AI 漏了）**。已修：成员 `lim_res_{}` + **`LimitResult` 加默认成员初始化器**（从类型上堵死，`limit()` 里那个 `LimitResult r;` 一并受益）。⚠ **没有测试能可靠抓住它**（未初始化读是 UB，ASan/UBSan 不覆盖，实测去掉 `{}` 仍 `ALL PASS`）→ 已记入 `chassis_loop/AGENTS.md` 账本 |
+| 3 | 施工单说"待你手敲"，代码却都做了 | **P25 = 用户手敲**（第一版多留一行，AI 报、用户删）；**P12 = 用户敲两版 → AI 重写为模板版 → 用户改 `kMinWheels=3`**。施工单已归档 `trash/`，归档件里补了"谁敲的"备注 |
+
+**新增**：`chassis_loop` 测试第 **10** 组（限幅结果暴露：首次 tick 前零值 · 阶跃后饱和标志 · 与 `cmd()` 一致）；
+`kinematics/test/compile_fail/` 两个反例（上界 `omni_over_capacity` / 下界 `omni_under_minimum`）。

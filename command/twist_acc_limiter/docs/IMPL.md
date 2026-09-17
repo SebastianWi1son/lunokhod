@@ -4,6 +4,8 @@ generated: false
 ---
 > **类：C 状态** —— **跟代码变**。⚠️ 与代码天然重复，建议降级为「一屏文件地图 + 追加式变更记录」，见 trash/README.md。
 > 文档体系与写作规则：../../../docs/README.md
+> **命名空间（2026-09-17）**：本文档里的类型名**省略 `lunokhod::` 前缀** —— 例：`MecanumDrive` 即
+> `lunokhod::kinematics::MecanumDrive`，`Twist` 即 `lunokhod::Twist`（规则见 [`AGENTS.md`](../../../AGENTS.md) §3.1）。
 
 # TwistAccLimiter 实现真相文档（以代码为准）
 
@@ -42,8 +44,10 @@ command/twist_acc_limiter/
 
 ```cpp
 struct LimitResult {
-    Twist out_;                              // 限幅后的输出
-    bool is_vx_lim_, is_vy_lim_, is_wz_lim_; // 各通道本帧是否被限幅（撞墙标志）
+    Twist out_{};                            // 限幅后的输出（默认成员初始化器 → 任何 `LimitResult x;` 都是确定值）
+    bool is_vx_lim_ = false;                 // 各通道本帧是否被限幅（撞墙标志）
+    bool is_vy_lim_ = false;
+    bool is_wz_lim_ = false;
 };
 
 class TwistAccLimiter {

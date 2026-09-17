@@ -4,6 +4,12 @@
 #include "chassis.hpp"
 #include <cstdio>
 
+// 命名空间（2026-09-17）：全仓类型收进 lunokhod::（规则见 AGENTS.md §3）
+using namespace lunokhod;
+using namespace lunokhod::twist_acc_limiter;
+using namespace lunokhod::kinematics;
+
+
 int main() {
     TwistAccLimiter limiter(1.0f, 1.0f, 2.0f);   // vx/vy: 1 m/s², wz: 2 rad/s²
     DiffDrive chassis(0.16f, 0.03f);             // 轮距 0.16m，轮半径 0.03m

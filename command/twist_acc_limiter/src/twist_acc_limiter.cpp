@@ -1,4 +1,6 @@
 #include "twist_acc_limiter.hpp"
+namespace lunokhod::twist_acc_limiter {
+
 
 TwistAccLimiter::TwistAccLimiter(float acc_vx, float acc_vy, float acc_wz)
         :acc_{ acc_vx, acc_vy, acc_wz }, prev_{ 0, 0, 0 } {}
@@ -31,3 +33,5 @@ float TwistAccLimiter::ramp(float cmd, float prev, float acc, float dt, bool& is
     if (cmd > hi) { return hi; }
     return cmd;
 }
+
+}  // namespace lunokhod::twist_acc_limiter

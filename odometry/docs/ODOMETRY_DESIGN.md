@@ -4,6 +4,8 @@ generated: false
 ---
 > **类：B 事实** —— **唯一来源**：别处只许链接，不许复制；改决策只改这里。 odometry 设计权威（v3 定稿，O1~O9 + R1~R7 全拍板）。
 > 文档体系与写作规则：../../docs/README.md
+> **命名空间（2026-09-17）**：本文档里的类型名**省略 `lunokhod::` 前缀** —— 例：`MecanumDrive` 即
+> `lunokhod::kinematics::MecanumDrive`，`Twist` 即 `lunokhod::Twist`（规则见 [`AGENTS.md`](../../AGENTS.md) §3.1）。
 
 # ODOMETRY_DESIGN.md — lunokhod/odometry 组件设计
 

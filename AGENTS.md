@@ -31,6 +31,27 @@ lunokhod = 嵌入式底盘控制系统。把 2024 年的 C 语言巡线代码，
 - 禁止 camelCase；领域术语优先（`twist` / `odometry` / `kinematics` / `residual`）。
 - 名字不绑定单位与实现细节。
 
+### 3.1 命名空间（2026-09-17 定案 —— 全仓**一个根**）
+
+```
+lunokhod::Twist / Pose / WheelSpeeds              ← 跨库共享的「词汇」放根
+lunokhod::kinematics::MecanumDrive
+lunokhod::odometry::Odometry
+lunokhod::twist_acc_limiter::TwistAccLimiter
+lunokhod::wheel::Wheel
+lunokhod::chassis_loop::ChassisLoop / WheelSet
+```
+
+- **根 = 项目名 `lunokhod::`**，**子命名空间 = 组件名**（与 `target_link_libraries` 里的库名一致）。
+- **跨库共享的数据类型放根** —— `Twist` / `WheelSpeeds` / `Pose` 是"谁都在用"的公共词汇，不该关进某个组件。
+- **理由**：① 与兄弟项目 `foucault` 的决策 **F10**（`foucault::math` / `solver` / `measure`）一致；
+  ② **根名防撞名** —— 消费方自己有个 `kinematics::` 也不会撞；
+  ③ 上层代码里 `lunokhod::` 一眼看出这是谁的类型。
+- **写法**：库内**声明处**包命名空间即可（内部引用靠外层查找，不逐处加前缀）；
+  **跨组件**引用写兄弟子命名空间（例：`odometry::SampleSink`）；消费方写全限定名或 `using namespace lunokhod;`。
+- **反例（踩过）**：曾只给 `wheel` 一个组件加命名空间（`wheel::`）而其余全在全局 —— 那是最不一致的状态
+  （细则见 `actuator/wheel/docs/log/WHEEL_LESSONS.md`）。
+
 ## 4. oracle 规则（金标不许自造）
 
 测试里每个"期望值"都必须能回答：**它从哪来？** 借的优先级（能用上面的就不许往下走）：
