@@ -235,9 +235,9 @@ static void test_targets_actually_reach_wheels() {
     ChassisLoopConfig cfg = unlimited_cfg();
     cfg.planner_.max_rate_ = 1.0e6f;      // Ramp 直通
     cfg.planner_.Tf_       = 0.0f;        // LPF 直通（alpha = dt/(Tf+dt) = 1）
-    cfg.pid_.kp_           = 1.0f;        // PWM = 目标
-    cfg.pid_.limit_out_    = 1.0e6f;
-    cfg.pid_.max_rate_out_ = 0.0f;        // 0 = 输出斜坡关闭
+    cfg.pid_ = PIDConfig{}.kp(1.0f)                     // PWM = 目标
+                               .limit_out(1.0e6f)
+                               .max_rate_out(0.0f);     // 0 = 输出斜坡关闭
     ChassisLoop<MecanumDrive> loop(cfg, MecanumDrive(0.10f, 0.12f, 0.03f),
                                    fake_measure, fake_set_pwm);
     ev_reset();

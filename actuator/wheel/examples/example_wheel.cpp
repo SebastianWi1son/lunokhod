@@ -34,11 +34,11 @@ int main() {
     // 闭环演示参数（示例自调：目标 0.7s 内收敛 ±5%、无超调）
     // 注意：不是 legacy 出厂值——legacy 参数配本文档的电机模型会因积分分离冻结在纯 P 静差（714rpm），
     // 真实系统参数与电机增益匹配，此处为演示闭环收敛而调校。
-    PIDConfig cfg;
-    cfg.kp_ = 4.0f; cfg.ki_ = 10.0f; cfg.kd_ = 0.5f;
-    cfg.limit_out_ = 3600.0f; cfg.limit_i_ = 1200.0f;
-    cfg.thresh_i_sep_ = 0.0f;    // 关闭积分分离（启动即积分，避免纯 P 静差）
-    cfg.max_rate_out_ = 10000.0f; cfg.d_filter_Tf_ = 0.005f;
+    const PIDConfig cfg = PIDConfig{}
+            .kp(4.0f).ki(10.0f).kd(0.5f)
+            .limit_out(3600.0f).limit_i(1200.0f)
+            .thresh_i_sep(0.0f)                  // 关闭积分分离（启动即积分，避免纯 P 静差）
+            .max_rate_out(10000.0f).d_filter_Tf(0.005f);
 
     SmoothPlannerConfig pc;
     pc.max_rate_ = 5000.0f;      // 加速爬满（0.2s），电机惯性 T=0.1s 是主要滞后

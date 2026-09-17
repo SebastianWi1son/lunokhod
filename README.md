@@ -39,6 +39,11 @@ lunokhod 是**底盘控制系统的库集合** —— 几个互相独立、可�
 | **twist_acc_limiter** | [`command/twist_acc_limiter/`](command/twist_acc_limiter/) | `twist_acc_limiter` | `contracts` | Twist 空间三通道加速度限幅（斜坡发生器） |
 | **chassis_loop** | [`chassis_loop/`](chassis_loop/) | `chassis_loop` | 上面全部 | **装配层**：限幅 → 逆解 → N×轮控 → 正解 → 里程计（拥有唯一心跳） |
 
+> **算法原语来自上游库 [ctlkit](https://github.com/SebastianWi1son/ctlkit)**：PID / LPF / Ramp / SmoothPlanner
+> 以 vendor 方式落在 `third_party/ctlkit/`（来源 sha 见其 `VERSION`）；`actuator/wheel/inc/` 里保留 4 个转发头，
+> 因此既有 `#include "pid.hpp"` 与全局名 `PID` / `PIDConfig` 等**都不变**（消费方零改动）。
+> 背景与决策（A1~A8 逐条）见 [`docs/ALGO_LIB_DECISION.md`](docs/ALGO_LIB_DECISION.md)。
+
 **依赖方向只能单向，且全部汇于最底层** `contracts`：
 
 ```

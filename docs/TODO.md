@@ -154,7 +154,7 @@ generated: false
 
 ## 架构/一致性
 
-### P3. Ramp 跨项目统一（DRY）⬜ 待决策
+### P3. Ramp 跨项目统一（DRY）🟡 跨仓部分已收敛（2026-09-17）· 仓内未做
 - **内容**：`actuator/wheel/src/ramp.cpp` 与 `twist_acc_limiter` 的 `ramp()` **算法完全相同**（max_step=rate·dt + clamp）
 - **权衡**：提取公共 `inc/ramp.hpp`（两项目共用）vs 接受重复 20 行（零依赖原则）
 - **下一步**：决策后执行；注意 wheel v0.1.0 已发布，提取是 v0.2.0 的变更（破坏性）
@@ -165,7 +165,12 @@ generated: false
   **已定约定**：PID 算法需求**归口 `~/Develop/Workspace/pid`**（登记），**落地同步两份活副本**
   （以 cyclotron 为准 —— 其 README 声明）。**待决策**：收敛成单一来源（子模块 / 单一副本 + 转发头）
   vs 接受双份人工同步。
-- **优先级**：🟡 中（两项目都已发布，随时可做）
+- **2026-09-17 收敛（跨仓部分 ✅）**：PID/LPF/Ramp/SmoothPlanner 归口上游库 **ctlkit**（`third_party/ctlkit/` vendor +
+  转发头 + 校验脚本）。lunokhod/actuator/wheel 与 cyclotron/foc 都改成引用上游 → **双活副本问题终结**；
+  上游 spec 是行为契约唯一来源（两侧仓内文档只留链接）。
+- **仍待做（仓内部分 ⬜）**：twist_acc_limiter 的 inline `ramp()` 换用上游 `ctl::Ramp`（数学相同，
+  属该组件自身的破坏性变更，跟它的发布节奏走）；决策见 `docs/ALGO_LIB_DECISION.md` 的 A7
+- **优先级**：🟡 中（跨仓部分已收敛；仓内那一处随时可做）
 
 ### P4. 分支名统一 ✅ **已完成（2026-09-14）**
 - **结果**：两个仓库（lunokhod / foucault）**本地与远端全部统一为 `main`**，旧 `master` 已删除

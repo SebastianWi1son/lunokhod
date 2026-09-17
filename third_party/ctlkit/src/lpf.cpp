@@ -1,4 +1,6 @@
-#include "lpf.hpp"
+#include "ctl/lpf.hpp"
+
+namespace ctl {
 
 LPF::LPF(float Tf): Tf_(Tf), prev_(0.0f) {}
 
@@ -9,3 +11,7 @@ float LPF::calc(float raw, float dt) {
 }
 
 void LPF::reset() { prev_ = 0.0f; }
+
+void LPF::set_state(float x) { prev_ = x; }
+
+}  // namespace ctl

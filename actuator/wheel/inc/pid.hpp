@@ -1,38 +1,22 @@
 #pragma once
 
+// ctlkit-forwarder —— 机器可读标记：本文件是转发头，不是上游副本（校验脚本据此跳过逐字比对）
+// 算法原语的上游是 ctlkit —— vendor 在 third_party/ctlkit/（VERSION 记来源 sha）。
+// 保留本路径与**全局名**：本组件历史如此（PID/LPF/Ramp/SmoothPlanner 一直放在全局命名空间，
+// wheel.hpp / chassis_loop / fw_poc 都直接写 PID、PIDConfig）→ 调用点零改动。
+// 血缘：本组件即这些原语的血缘源头（ctlkit 收录时来源标注为 lunokhod/actuator/wheel）。
+// 行为契约见上游库 spec（ctlkit 仓的 docs/spec/，未随 vendor 拷贝）。
+
 #include "lpf.hpp"
 #include "ramp.hpp"
 
-struct PIDConfig {
-    float kp_ = 0.0f;
-    float ki_ = 0.0f;
-    float kd_ = 0.0f;
+#include "ctl/pid.hpp"
 
-    float limit_out_ = 0.0f;
-    // --- i_term method property ---
-    float limit_i_ = 0.0f;
-    float thresh_i_sep_ = 0.0f;
-    // --- dsp tools property ---
-    float max_rate_out_ = 0.0f;
-    float d_filter_Tf_ = 0.0f;
-};
-
-class PID {
-public:
-    explicit PID(const PIDConfig &cfg);     // 显式确保PIDConfig作为参数参与构造
-    float calc(float cmd, float measure, float dt);
-    void reset();
-private:
-    // ----- Math Tools -----
-    static float fabs(float val);
-    static float constrainf(float val, float limit);
-
-    // --- property ---
-    PIDConfig cfg_;
-    float integral_;
-    float error_prev_;
-    float measure_prev_;
-    // --- dsp tools ---
-    LPF d_filter_;
-    Ramp ramp_out_;
-};
+using ctl::PID;
+using ctl::PIDConfig;
+using ctl::PIDGains;
+using ctl::PIDLimits;
+using ctl::PIDTunings;
+using ctl::PIDState;
+using ctl::PIDStatus;
+using ctl::PIDPorts;

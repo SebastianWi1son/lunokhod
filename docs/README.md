@@ -181,6 +181,7 @@ lunokhod/
 ├── actuator/                           执行器层（目标转速 → effort，在逆解之下）
 │   └── wheel/docs/log/
 │       └── WHEEL_LESSONS.md           A 日志：踩坑与收获
+├── third_party/ctlkit/                 上游算法库 vendor（PID/LPF/Ramp/SmoothPlanner + VERSION 记来源 sha）
 └── trash/                              待裁决：判定后整目录删除
 ```
 

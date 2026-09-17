@@ -7,7 +7,7 @@ generated: false
 
 # 算法库策略 — 决策清单
 
-> 日期：2026-08-23 ｜ 状态：**待用户拍板，未进入实现**
+> 日期：2026-08-23 ｜ 状态：**已落地（2026-09-17）** —— 决策清单 A1~A8 的逐条结果见下方「落地结果」
 > 动因（用户原话）："常复用的 pid,dsp,ff 等算法打包成算法库上传 GitHub，实际开发按需 pull，
 > 过程中发现 pull 下来的代码可修改升级，push 回去同步所有用到的项目。
 > 猜想手敲的算法库多少会有可升级的地方，但未来多个项目不好同步。"
@@ -19,16 +19,34 @@ generated: false
 
 | 算法 | wheel | twist_acc_limiter | kinematics | 备注 |
 |---|---|---|---|---|
-| PID（工业级） | ✅ pid.hpp/cpp | — | — | 微分先行/梯形积分/积分分离/抗饱和/斜坡 |
-| LPF | ✅ lpf.hpp/cpp | — | — | alpha = dt/(Tf+dt) |
-| Ramp | ✅ ramp.hpp/cpp | ⚠️ inline 实现（数学相同） | — | **DRY 问题** |
-| SmoothPlanner | ✅ smooth_planner.hpp/cpp | — | — | Ramp + 两级 LPF |
+| PID（工业级） | ✅ vendor 引用（转发头） | — | — | 微分先行/梯形积分/积分分离/抗饱和/斜坡 |
+| LPF | ✅ vendor 引用（转发头） | — | — | alpha = dt/(Tf+dt) |
+| Ramp | ✅ vendor 引用（转发头） | ⚠️ inline 实现（数学相同） | — | **仓内 DRY 未收**（见 A7） |
+| SmoothPlanner | ✅ vendor 引用（转发头） | — | — | Ramp + 两级 LPF |
 | 前馈 ff | — | — | — | 待确认内容 |
 | 运动学 | — | — | ✅ kinematics | 是否入库？ |
 
 ---
 
-## 决策点（请逐条拍板）
+## 落地结果（2026-09-17）
+
+> 上游库 = [ctlkit](https://github.com/SebastianWi1son/ctlkit)（公开 MIT，namespace `ctl`，v0.1.0 已冻结 API）。
+> vendor 落在 `third_party/ctlkit/`（`inc` + `src` + `VERSION` 记来源 sha 与校验命令）。
+
+| # | 决策点 | 落地结果 |
+|---|---|---|
+| **A1** | 库名 | **ctlkit · namespace `ctl`**（`ctl::PID` / `ctl::LPF` / `ctl::Ramp` / `ctl::SmoothPlanner` / `ctl::Deadzone`） |
+| **A2** | 范围 | pid + lpf + ramp + smooth_planner + deadzone；**ff 未纳入**（内容待明确） |
+| **A3** | 引用方式 | **b 文件复制 vendor**（原推荐 a submodule）—— 每仓 `third_party/ctlkit/` 逐字拷贝 + 旧位置留转发头（带 `// ctlkit-forwarder` 标记），配上游校验脚本守门（命令见 `VERSION`）。未用 submodule：上游发布节奏未定，且嵌入式/离线要能随仓走 |
+| **A4** | 版本策略 | SemVer + 冻结分支：`v0.1.0` 冻结（minor 只增不改，breaking → major）；未发布增量走 dev 分支，冻结时再 merge 回 main |
+| **A5** | wheel 的迁移方式 | **b 剪切移动**（原推荐 a 复制起步）：4 个原语副本（pid/lpf/ramp/smooth_planner）已删除，改由 vendor 提供；对消费方是**破坏性变更**（配置字段由平铺变分组路径 `cfg.limits_.limit_out_`，写法推荐具名链式 `PIDConfig{}.kp(1.0f).limit_out(1e6f)`）→ wheel 下次发布应体现 |
+| **A6** | 同步机制 | 同步脚本（vendor 模式）：上游 `downstream_diff.py` —— vendor 定点逐字比对 + 转发头识别 + **未标记的同名副本一律拦下**；`--selftest` 7 例自证 |
+| **A7** | twist_acc_limiter 的 ramp | ⬜ **未做**：仍是自己的 inline ramp（数学相同）。要做就换 `ctl::Ramp`，属该组件自身的破坏性变更，待其发布节奏 |
+| **A8** | 测试 | 上游：oracle 黄金向量 19 例 + smoke + 判别力实测（改坏必红）；下游：保留自己的锚点测试（wheel 9 项，迁移后逐字节复现） |
+
+---
+
+## 决策点（当初的选项与推荐，存档）
 
 ### A1. 库名
 - 选项：a) `algo-lib` b) `lunokhod-algo` c) 中性领域名（如 `control-algo`）
@@ -74,8 +92,8 @@ generated: false
 
 ## 与 FOC 的关系
 
-- cyclotron 的 PID 优先从算法库拉取（FOC_DESIGN.md D6）——算法库是 FOC 的第一个真实消费场景
-- 若算法库先于 FOC 落地，cyclotron 直接引用；否则副本过渡
+- ✅ **已完成**（2026-09-17）：cyclotron/foc 先接入（vendor + 转发头，行为逐字节复现），
+  lunokhod 随后接入（本文件所记）—— 两份活副本从此归一，上游唯一
 
 ## 明确不做
 

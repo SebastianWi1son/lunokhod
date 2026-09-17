@@ -7,13 +7,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # 库本体 —— 对外产物
 #   消费方： target_link_libraries(<你的 target> PRIVATE wheel)
 # ===========================================================================
+# 算法原语（pid/lpf/ramp/smooth_planner）自 v0.1.1 起来自上游库 ctlkit（vendor，见 third_party/ctlkit/VERSION）
 add_library(wheel STATIC
-        src/lpf.cpp
-        src/ramp.cpp
-        src/smooth_planner.cpp
-        src/pid.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/ctlkit/src/lpf.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/ctlkit/src/ramp.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/ctlkit/src/smooth_planner.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/ctlkit/src/pid.cpp
         src/wheel.cpp)
-target_include_directories(wheel PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc)
+target_include_directories(wheel PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/inc                              # 本组件头（含 4 个转发头）
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/ctlkit/inc)    # 上游库头（ctl/...）
 target_compile_options(wheel PRIVATE -Wall -Wextra -Werror)
 
 # ── 两种构建模式（见 kinematics/CMakeLists.txt 的说明）──
