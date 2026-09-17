@@ -197,7 +197,7 @@ lunokhod/                              （全仓类型在 `lunokhod::` 之下 �
 **规则：跨仓引用不许写成 markdown 链接。**
 CI 只 clone 本仓一个仓库（`ci_local.py` 也是在临时目录里跑），
 所以指向兄弟仓的链接**在所有自动化环境里都必然断**。
-跨仓的东西用**裸路径**（`~/Develop/Workspace/fw_poc/`）或**裸名字**（`foucault`）提一下，
+跨仓的东西用**裸路径**（`~/Develop/Workspace/KND_Trial/`）或**裸名字**（`foucault`）提一下，
 **别用方括号加圆括号的 markdown 链接语法** —— 门禁 R4 会红，而它红得对。
 
 ---

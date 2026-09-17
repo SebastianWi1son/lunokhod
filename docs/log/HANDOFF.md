@@ -501,3 +501,52 @@ void observe_heading(float heading_rad, float trust = 1.0f);
 
 **新增**：`chassis_loop` 测试第 **10** 组（限幅结果暴露：首次 tick 前零值 · 阶跃后饱和标志 · 与 `cmd()` 一致）；
 `kinematics/test/compile_fail/` 两个反例（上界 `omni_over_capacity` / 下界 `omni_under_minimum`）。
+
+### 补记（同日稍晚）：`fw_poc` 退役
+
+下游那个 PC 装配 PoC（`~/Develop/Workspace/fw_poc/`，110 行，**未纳管 git**）经核实**内容已全部并入
+`KND_Trial`** —— 实测**两份手写链的仿真输出 md5 逐位一致**（`9ab64f43…`）。故它**不再是消费方**：
+
+- 它的**输出锚点**（此前只在 `/tmp` + 一个**无法重新编译**的旧二进制里）已入仓：
+  `chassis_loop/test/golden/knd_sim_anchor.txt`（溯源与复核方法见 `chassis_loop/docs/log/ACCEPTANCE.md` 附录）。
+- 仓内**前瞻性引用已重指**（顶层 `CMakeLists.txt` / `README.md` / `third_party/ctlkit/VERSION` /
+  `docs/TODO.md` P30 / `docs/README.md` 的"裸路径"示例）；**历史性引用原样保留**（日志只增不改）。
+- **消费方只剩一个**：`KND_Trial`。上面"供下游消费（KND_Trial / fw_poc / 下一个产品）"里的 `fw_poc` 请按此理解。
+
+### 补记二（同日）：拿真下游做**接触实测**（P30 的手工版）
+
+在 `/tmp` 隔离副本（**真 `KND_Trial` 一行未动**）上对着冻结版 lunokhod 走了一遍完整迁移：
+
+| 项 | 结果 |
+|---|---|
+| 迁移成本 | **3 个文件、约 60 行**（`app/inc/app.hpp` · `app/src/app.cpp` · `sim/src/main.cpp`） |
+| 迁移内容 | ① 5 行 `using`（`lunokhod` + 4 个子命名空间）② `PIDConfig` 改 **setter 式** ③ 配置分家（`ChassisLoopConfig` 只剩限幅+里程计，PID/规划器进 `WheelSetConfig`）④ 构造注入执行器组 |
+| **验收** | 迁移后 `knd_sim` 输出与 `chassis_loop/test/golden/knd_sim_anchor.txt` **逐位一致** ✓ |
+| 板级固件 | 交叉编 `arm-none-eabi-g++` **过** ✓ 固件 (`KND_Trial.elf`) 也过 —— 但**固件今天并没有链 `knd_app`**（只 `stm32cubemx + knd_bsp + knd_drivers`）→ 控制链上板是下游未来的活 |
+| **MCU 侧首次真验** | 冻结版全部库 + 一个固件形状的探针 TU，`-fno-exceptions -fno-rtti -Wall -Wextra -Werror`（外加 `-Wconversion -Wshadow -pedantic`）**零告警**；未定义符号只有 `__aeabi_*` / `libm` / `memcpy` + 库自身 —— **无 libstdc++、无 `__cxa_*`、无异常/RTTI** ✓；整链 `.text` ≈1.3 KB + `.bss` ≈1.9 KB |
+| 下游 host 测试 | `KND_Trial/tests` **3/3 过**（板级不碰算法库，天然免疫） |
+
+**摩擦点（按价值排序）**：
+1. **`ChassisLoop` 模板参数写错时诊断质量差** —— 报错指向库内部，不指向用户那行（详见 `TODO.md` **P33**）；本轮已在接入指南 §6 补成第 6 条坑，并确认 `WheelLoop<Chassis>` 别名是最短正解
+2. `WheelSet` / `WheelLoop` 住在**另一个头** `wheel_set.hpp`（`chassis_loop.hpp` 故意不 include 它 —— 依赖倒置）→ 消费方得照接入指南 include；接入指南已必读
+3. `ctlkit` 的 `PIDConfig` 是 **setter 式**（`p.kp(8.0f)`），非字段式 —— 已在 `third_party/ctlkit/VERSION` 补提示
+4. **文档够用**：`docs/INTEGRATION.md` 的 5 行 `using` + include 清单与本次实际所需**逐字吻合**（没多没少）
+
+### 补记三（同日）：真下游已迁移，P30 关闭
+
+用户授权后**直接改了真 `KND_Trial`**（此前一切都在 `/tmp` 隔离副本上做）——
+按「尽量只改 lunokhod 相关内容」的要求，**只动 3 个文件**：`app/inc/app.hpp` · `app/src/app.cpp` ·
+`sim/src/main.cpp`（`git status` 里正好只有这 3 个从 `A ` 变 `AM `，其余 172 个文件未碰）。
+
+| 验收 | 结果 |
+|---|---|
+| `knd_sim` 输出 | 与 `chassis_loop/test/golden/knd_sim_anchor.txt` **逐位一致** ✓ |
+| KND host 测试 | **3/3 过** ✓ |
+| 板级固件（`arm-none-eabi`） | 交叉编译**过**，产出 2.3 MB `.elf` ✓ |
+| 告警 | 零 ✓ |
+
+**迁移三件事**（都只碰调用点）：① 5 行 `using` ② `PIDConfig` 改 setter 式 ③ 配置分家 + 构造注入
+执行器组（`WheelLoop<MecanumDrive>` 别名，一行说完）。**KND 侧 `hal::set_pwm` 名字保留不动** ——
+那是它平台层的语义（写 PWM），与库侧 `SetEffortFn` 的契约兼容。
+
+**未做（有意）**：不在 KND 里 commit（该仓**尚无首个 commit**，175 个文件全在暂存区 —— 首次提交是用户的事）。

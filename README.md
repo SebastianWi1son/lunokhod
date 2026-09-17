@@ -83,7 +83,8 @@ target_link_libraries(fw PRIVATE kinematics)
 ```
 
 被引入的组件会**自动进入“库模式”**：只出库，不生成测试 / 示例 / 工具
-（交叉编译固件时这一点是必须的）。可运行的完整范例见 `~/Develop/Workspace/fw_poc/`。
+（交叉编译固件时这一点是必须的）。可运行的完整范例见 [`docs/INTEGRATION.md`](docs/INTEGRATION.md)，
+或真工程 `~/Develop/Workspace/KND_Trial/`（它自己手写的平台层 + 装配链，已被本仓 `chassis_loop` 取代）。
 
 > ⚠️ **不要** `add_subdirectory(lunokhod)` —— 根目录是开发期聚合器，
 > 引它会连带生成全部组件的测试可执行文件。想要“一键构建”用 ①。

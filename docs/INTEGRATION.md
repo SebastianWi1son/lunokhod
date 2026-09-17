@@ -21,6 +21,14 @@ generated: false
                      限幅 → 目标 → 执行 → 测量 → 正解 → 里程计
 ```
 
+## 0.0 本指南已被真下游走过一遍（2026-09-17）
+
+`KND_Trial`（麦轮 4 轮实车工程）按本文迁移完成：**3 个文件、约 60 行**
+（编排层 `app.hpp` + `app.cpp`、PC 入口 `main.cpp`，都在 `~/Develop/Workspace/KND_Trial/` 下），
+迁移后仿真输出**逐位不变**、
+板级固件交叉编译过。本文 §3 的 include 清单与 5 行 `using` 与实际所需**逐字吻合**；
+踩到的新坑已补进 §6（现在六条）。
+
 ## 0.1 名字怎么念（2026-09-17 定案）
 
 所有类型都在 **`lunokhod::`** 之下，**子命名空间 = 组件名**；**跨库共享的数据在根**：
@@ -186,7 +194,7 @@ est.observe_heading(yaw, trust);     // foucault 的接口；trust 由你（调�
 
 **禁区**：让 lunokhod 的任何库 `#include` 姿态库的头，或反过来。
 
-## 6. 五个常见坑（都踩过）
+## 6. 六个常见坑（都踩过）
 
 | 坑 | 症状 | 正解 |
 |---|---|---|
@@ -195,6 +203,7 @@ est.observe_heading(yaw, trust);     // foucault 的接口；trust 由你（调�
 | 单位混用（计数 / rpm / rad/s） | 位姿差一个常数倍，且**看起来"能跑"** | 只在 `read_encoder` 里做一次换算，之后全是 rad/s |
 | 符号不一致 | 前进时位姿往回走 | 定死"正 = 车体前进"，用它校验四个轮子 |
 | 消费时漏编上游算法库 | 链接期 `undefined reference to ctl::PID::...` | `third_party/ctlkit/src` 必须一起编（或用 CMake target 链，见下） |
+| **把 `ChassisLoop` 的模板参数写成底盘** ⭐ | 报错却指向**库内部**（`chassis_loop.hpp`「`MecanumDrive` has no member named `inverse` / `apply` / `measure` / `forward`」），看起来像你自己那个类缺方法 | 模板参数是**执行器组**，不是底盘。用别名 `WheelLoop<MecanumDrive>` 一句话说完（`wheel_set.hpp` 提供）；写成嵌套形式 `ChassisLoop<WheelSet<Chassis>>` 也对，但错起来更难认。**实测：从旧版升上来的代码 100% 踩这条** |
 
 ## 7. 把它引进你的工程
 

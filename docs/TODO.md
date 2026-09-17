@@ -36,7 +36,7 @@ generated: false
 | **G1** | **平台层 / HAL 抽象** | 轮子要 `MeasureSpeedFn` / `SetPwmFn`，现在没人实现 → 需编码器定时器 + PWM 的 STM32 驱动 | ⚠️ PoC 有 PC 假实现，**真机实现未写** |
 | **G2** | **IMU 驱动** | ICM-20602 → foucault 的 `IMUSample` 接口 | ⚠️ legacy 有 `Lib/driver/hal/imu/icm20602/` |
 | **G3** | **残差监测 → 融合层** | 上游链缺两层（见 `../docs/ARCHITECTURE.md` §3）：① **残差监测**（两个独立来源对一下，是 FDI，**不是融合**）② **融合/状态估计**（用残差调权重）③ 修正 | ❌ 无（两层都不存在） |
-| **G4** | **调度与时间基** | 固定周期循环（50 Hz ~ 1 kHz），`tick` 从哪来 | ⚠️ PC 侧已在 `fw_poc` 验证；**缺「装配层」把它固化成库**（见 P20） |
+| **G4** | **调度与时间基** | 固定周期循环（50 Hz ~ 1 kHz），`tick` 从哪来 | ✅ 已固化：`chassis_loop` 的 `tick(dt, now)` 就是它（见 P20）；PC 侧验证见 `KND_Trial/sim/` |
 | **G5** | **通信协议** | 上层怎么下发 `Twist`、怎么回传位姿/状态 | ❌ 无 |
 | **G6** | **实车标定** | 轮径 / 轮距 / `twist_scale` / IMU 安装对齐 | ❌ 无（需硬件） |
 | **G7** | **安全** | 看门狗、失控保护、上电自检 | ❌ 无 |
@@ -120,7 +120,11 @@ generated: false
 
 ### PoC（已跑通）
 
-`~/Develop/Workspace/fw_poc/` —— 4 个库拼成一条链，PC 上跑通：
+> **2026-09-17 退役**：`~/Develop/Workspace/fw_poc/` 的内容已全部并入 `KND_Trial`（`app/` + `sim/`），
+> 两份手写链的仿真输出 **md5 逐位一致**；输出锚点已入仓 `chassis_loop/test/golden/knd_sim_anchor.txt`。
+> 下面记的是它当时的样子（历史）。
+
+`~/Develop/Workspace/fw_poc/src/main.cpp` —— 4 个库拼成一条链，PC 上跑通：
 
 ```
 遥控 ──► Twist ──► 限幅 ──► 逆解 ──► 4×轮子(曲线+PID) ──► PWM ──► 假电机
@@ -463,7 +467,8 @@ FK(measured_wheel_speeds).wz  −  gyro_z
 ### P20. 装配层（Chassis Loop）🔴 **下一任务**（2026-09-15 定）
 
 - **问题**：`lunokhod` 的零件齐了，但**装配逻辑住在消费方** ——
-  `~/Develop/Workspace/fw_poc/`（`main.cpp` 110 行）与 `~/Develop/Workspace/KND_Trial/firmware/`（`app.cpp` 68 行）
+  `~/Develop/Workspace/fw_poc/`（`main.cpp` 110 行；已退役）与 `~/Develop/Workspace/KND_Trial/`（当时的
+  `firmware/`，此后重整为 `app/` + `bsp/` + `sim/`）
   **写的是同一条链**。链里有易错知识（tick 顺序、`dt` 用实测值、融合钩子在里程计之后），
   每重写一遍就有一次写错的机会。
 - **它的价值不只是「能把车跑起来」** —— 它同时是整条**感知线的取样点**（P19 的全部原料）
@@ -548,7 +553,7 @@ FK(measured_wheel_speeds).wz  −  gyro_z
   `tick()` 按 `count_` 循环 `wheels_[i]` → `ChassisLoop<OmniDrive>`（wn = 6）**越界写**。
 - **证据（实测）**：UBSan `index 4 out of bounds for type 'Wheel *[4]'` + ASan `SEGV`（在 `Wheel::set_cmd`）→ 段错误。
 - **为什么没被测出来**：7 组测试只用 `MecanumDrive`(4) 与 `DiffDrive`(2)，`OmniDrive` **一次都没构造**。
-- **影响面**：现有消费方（KND_Trial 麦轮 / `fw_poc`）都是 4 轮 → 触发不到；但 `OmniDrive` 本来就支持 N 轮、就在本仓。
+- **影响面**：当时消费方（KND_Trial 麦轮 / `fw_poc`）都是 4 轮 → 触发不到；但 `OmniDrive` 本来就支持 N 轮、就在本仓。
 - **选项**：① **容量对齐契约**（`wheels_[6]`；2 轮车多几个死对象，改动最小）
   ② 加守卫（编译期/运行期断言，明确「本组件只支持 ≤ 4」）
   ③ 容量做模板参数 `ChassisLoop<Chassis, N>`（零浪费，但要 `index_sequence` 构造 N 个 `Wheel`）
@@ -562,6 +567,18 @@ FK(measured_wheel_speeds).wz  −  gyro_z
 ---
 
 ## 2026-09-16 新增（PID 归口 + 运动状态暴露）
+
+### P33. 接缝写错时的**诊断质量**（解冻后候选，不阻塞冻结）⬜ **未做**
+
+- **来源**：2026-09-17 拿真下游（`KND_Trial` 隔离副本）对着冻结版实测撞出来的 ——
+  旧代码 `ChassisLoop<MecanumDrive>`（模板参数误写成底盘）产出 4 条错误，**全部指向 lunokhod 自己的
+  `chassis_loop.hpp`**：「`MecanumDrive` has no member named `inverse` / `apply` / `measure` / `forward`」。
+  用户看到的是"我写的类缺方法"，而真因是"模板参数该是执行器组"。
+- **代价**：每个从旧版升上来的消费方都要自己猜一次（本轮已加进 `docs/INTEGRATION.md` §6 的坑列表兜住）
+- **建议做法**：在 `ChassisLoop` 类体**最前面**放一条 `static_assert`（文案直接说"模板参数应为执行器组，
+  见 `wheel_set.hpp` 的 `WheelLoop<Chassis>` 别名"，并列出 5 个方法名）——
+  报错顺序在最前面，用户第一眼就能看到。**不引入 `<type_traits>`**（库仍是 `<cmath>`/`<cstdint>` 零依赖）。
+- **判据**：故意把模板参数写成 `MecanumDrive`，第一条错误必须是那条 `static_assert`。
 
 ### P25. 装配层暴露限幅饱和标志（`LimitResult` 被丢弃）✅ **已做（2026-09-17）**
 
@@ -614,7 +631,7 @@ FK(measured_wheel_speeds).wz  −  gyro_z
   ③ 注释写明语义 = 「**本拍 PID 输出**」，不是「实际写到硬件的值」（回调为空时仍有值）
   ④ 量纲由调用方约定 → 文档声明 + **测试钉单位**（`WHEEL_LESSONS` §5）；
   **不做归一化**（那要库知道 `limit` 的语义 → 撞 P11）
-- **对调用方零影响**：`KND_Trial` / `fw_poc` 的 `hal::set_pwm` 是**位置传参**，不用动。
+- **对调用方零影响**：`KND_Trial` / `fw_poc` 的 `hal::set_pwm` 是**位置传参**，不用动（`fw_poc` 此后已并入 `KND_Trial`）。
 - **A 类日志会留旧名**（`odometry/docs/log/ODOMETRY_FAQ.md`、`actuator/wheel/docs/log/WHEEL_LESSONS.md`）——
   **正常，不许回头改**（日志只增不改）。
 - **时机**：**不单独发版** —— 与 **P11**（0 语义）+ **P23**（-Wconversion）+ effort 一起进 **wheel v0.2.0**，
@@ -688,7 +705,7 @@ FK(measured_wheel_speeds).wz  −  gyro_z
   定义已不在本仓（上游 ctlkit vendor 在 `third_party/ctlkit/`），收口只需改 4 个转发头
   （全局 `using` → `namespace wheel { using ctl::PID; … }`），或干脆让消费方直接写 `ctl::PID` 并删掉转发头；
   消费方漏改会被编译器逐条点名（不静默）。
-- **影响面**：`wheel.hpp` / `chassis_loop` / `fw_poc` / `KND_Trial` 的限定名；破坏性变更 → 建议与 P26 同批进 wheel 的下一次发布
+- **影响面**：`wheel.hpp` / `chassis_loop` / `fw_poc`（后并入 `KND_Trial`）/ `KND_Trial` 的限定名；破坏性变更 → 建议与 P26 同批进 wheel 的下一次发布
 - **✅ 已做（2026-09-17，趁下游未开工）**：15 个全局名全部收进 `namespace wheel`；
   4 个转发头里的**过期注释**（原文写着"保留全局名"）同批改掉；调用点：`wheel_set.hpp`（限定名）、
   两个测试与示例（文件内 `using`）、CI 消费示例、`docs/INTEGRATION.md` 示例。
@@ -738,7 +755,7 @@ FK(measured_wheel_speeds).wz  −  gyro_z
 
 ---
 
-### P30. 上游破坏性改动后，外仓消费方没有自动化核对 ⬜ **待做**（2026-09-17）
+### P30. 上游破坏性改动后，外仓消费方没有自动化核对 ✅ **已做（2026-09-17 手工跑通）**
 
 - **怎么发现的**：`ctlkit` v0.1.1 把 `PIDConfig` 改成 `gains_/limits_/tunings_` 三段后，
   **KND_Trial 的 `app.hpp` 直接编译不过**（还在用旧扁平字段 `p.kd_ = …`）。
@@ -748,12 +765,22 @@ FK(measured_wheel_speeds).wz  −  gyro_z
 - **风险同类**：任何「下游只改调用点」的上游迁移（ctlkit 升版、契约改名、`SetPwmFn`→`SetEffortFn`）
   都会重演这一幕：**库内绿、库外断**。
 - **2026-09-17 补：下游有两个**（都在库外、都未提交）—— `KND_Trial`（3 个文件）与
-  `~/Develop/Workspace/fw_poc/`（1 个文件）。**全仓命名空间（P32）又是一次同类破坏**：
+  ~~`~/Develop/Workspace/fw_poc/`（1 个文件）~~ —— **2026-09-17 核实：它的内容已全部并入 `KND_Trial`**
+  （两份手写链的仿真输出 md5 逐位一致），**已不再是消费方**，不必迁移。
+  **全仓命名空间（P32）又是一次同类破坏**：
   两个下游都要加 `lunokhod::` 限定。**核对清单第 2 条要跑两遍**。
 - **选项**：① 每次上游迁移后**人工跑一次** KND sim 构建 + 锚点比对（约 1 分钟，最省）
   ② 给 KND_Trial 建仓并加一个「消费 lunokhod main」的 CI job（跨仓，成本高）
   ③ 在 `third_party/ctlkit/VERSION` 的「校验」一行旁补一条「下游手动核对清单」
 - **建议**：先 ① + ③（把动作写进文档，不建跨仓 CI）。
 - **2026-09-17 部分落地**：③ 已做 —— 核对清单写进了 `third_party/ctlkit/VERSION` 的「下游核对」
+- **✅ 2026-09-17 收口（按选项 ① 真跑了一遍）**：在 `/tmp` 隔离副本上把真下游 `KND_Trial`
+  迁到冻结版，随后**用户授权直接改真工程**（只动 lunokhod 相关的 3 个文件：
+  `app.hpp` / `app.cpp` / `main.cpp`；约 60 行）。
+  验收：`knd_sim` 输出与 `chassis_loop/test/golden/knd_sim_anchor.txt` **逐位一致** ·
+  KND host 测试 **3/3** · 板级固件交叉编译**过**（`arm-none-eabi`，2.3 MB `.elf`）· 零告警。
+  **摩擦与改进已回灌文档**：接入指南 §6 新增第 6 条坑（`ChassisLoop` 模板参数应为执行器组，
+  用 `WheelLoop<Chassis>` 别名）· `ctlkit/VERSION` 补「PID 是 setter 式」· 诊断质量问题立项 **P33**。
+  ⚠ 仍然**没有自动化**：下次上游再破就会重演 —— ① 靠人记得跑，这条清单是唯一的机制。
   一节（含"库内绿 ≠ 库外能编"的逐条动作 + 锚点比对）。① 仍需每次迁移后人工跑一次。
 - **优先级**：🟡 中（每次上游迁移都会踩）

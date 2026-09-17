@@ -20,7 +20,8 @@ project(lunokhod LANGUAGES CXX)
 #           add_subdirectory(<lunokhod>/actuator/wheel                ${CMAKE_BINARY_DIR}/_ext/wheel)
 #           add_subdirectory(<lunokhod>/command/twist_acc_limiter    ${CMAKE_BINARY_DIR}/_ext/tal)
 #       组件会自动进入"库模式"：只出库，不出测试/示例/工具。
-#       参考实现：~/Develop/Workspace/fw_poc/CMakeLists.txt
+#       参考实现：docs/INTEGRATION.md（下游接入指南）
+#                 + ~/Develop/Workspace/KND_Trial/libs/CMakeLists.txt（真工程：knd_add_dep 去重）
 #
 #   为什么要有这个聚合器：没有它，跑全部测试得进 5 个目录各配置一次。
 #   为什么消费方不该用它：它会把 5 个组件的测试/示例/工具全部生成出来 ——

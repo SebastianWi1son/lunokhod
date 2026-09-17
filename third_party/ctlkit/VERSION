@@ -8,7 +8,10 @@
 
 下游核对（上游迁移后逐条跑，约 1 分钟）：
   1 本仓全绿：python3 scripts/ci_local.py            # 注意：库内绿 ≠ 库外能编
-  2 库外能编：KND_Trial 与 fw_poc 各 cmake + build    # 两个外仓消费方，最容易断在这里
+  2 库外能编：KND_Trial 的 cmake + build             # 唯一的库外消费方，最容易断在这里
   3 数值不变：跑 KND sim 并与锚点比对                 # 期望 md5 9ab64f43200d263c8386490ae7d70c09
   4 只改调用点：本目录禁止就地修改（规则见上）；差异应为"下游调用点"而非"上游实现"
+已按此跑通：2026-09-17（KND_Trial 迁移 3 文件 ≈60 行，sim 输出与锚点逐位一致）。
 为什么第 2 条必要：v0.1.1 把 PIDConfig 改成三段式后，本仓 5 个 job 全绿，KND_Trial 直接编不过（P30）。
+⚠ 迁 PIDConfig 时注意：字段是 **setter 式**（`p.kp(8.0f).ki(1.2f)…`，可链式），**不是** `p.kp = 8.0f`
+  （实测这么写会得到 6 条 `invalid use of member function … did you forget the '()' ?`）。

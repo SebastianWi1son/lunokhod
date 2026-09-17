@@ -129,3 +129,32 @@ v0.1.1，上游 sha `db2d952`），下游保留转发头与全局名。装配层
 
 **文档同步**：`DESIGN.md`（§3 职责 / §5.2 契约 / §6 六步图 / §8.2 D12 / §9 F1）·
 `IMPL.md`（代码地图）· 施工单 `WORK_SEAM.md`（已归档 `trash/`；§3 两段代码 = 已落地代码逐字）· CI 消费示例。
+
+---
+
+## 附：下游行为锚点入仓（2026-09-17）
+
+**背景**：本文件多处引用的「KND 仿真输出 md5 `9ab64f43…`」，其**输出文本此前只存在于 `/tmp`**
+（外加 `~/Develop/Workspace/fw_poc/build/` 里那份**已经无法重新编译**的旧二进制 —— 它的 CMake 路径
+`lunokhod/control/wheel` 早已随目录重组消失）。**md5 字符串本身不是凭据**：没有输出文本，
+冻结文档里那 8 处引用就成了无法复核的悬空引用。
+
+**处置**：输出原文入仓 —— `chassis_loop/test/golden/knd_sim_anchor.txt`（8 行：表头 + 4 个采样点 + 2 行汇总；4 秒 4000 拍）。
+
+**出处（oracle 溯源，按 AGENTS.md §4）**：这条锚点是**两份各自手写的装配链**跑出同一结果：
+
+| 独立实现 | 位置 | 说明 |
+|---|---|---|
+| ① 下游 PC 装配 PoC | `~/Develop/Workspace/fw_poc/src/main.cpp`（110 行，**未纳管 git**） | 最早那条链 |
+| ② 下游固件工程 | `KND_Trial`（`app/` + `sim/`，从 ① 搬来并分成了 app/bsp/sim） | 现役消费方 |
+
+2026-09-17 实测：**① 的旧二进制（改动前编出来的）与 ② 的仿真输出 md5 逐位一致**
+（`9ab64f43200d263c8386490ae7d70c09`）→ 迁移是**等价**的，不是"看着像"；
+这也是 lunokhod 侧每一轮改造后比对的那条锚点（接缝改造 / 命名空间 / ctlkit 迁移前后均不变）。
+
+**复核方法**（P30 下游迁移时照此验收）：把 `KND_Trial` 的 `app/` + `sim/` + `libs/` 复制到隔离目录、
+按 `third_party/ctlkit/VERSION` 的核对清单改调用点，跑 `./b/knd_sim`，与
+`chassis_loop/test/golden/knd_sim_anchor.txt` **逐位 `diff`**（真工程按既有决定不动）。
+
+> 溯源补记：`chassis_loop/docs/log/ACCEPTANCE.md` 上文那句"当前两个消费方（KND_Trial 的麦轮、`fw_poc`）"
+> 是当时的实况；此后 `fw_poc` 的内容已全部并入 `KND_Trial`（输出逐位一致），该目录**不再是消费方**。
