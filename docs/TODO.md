@@ -215,7 +215,7 @@ generated: false
 - **下一步**：决策后执行；此前先做 P11 的工作树收尾（未提交改动落盘）
 - **优先级**：🔴 高
 
-### P11. PID 默认语义决策 ⬜ 待决策（与定案冲突）
+### P11. PID 默认语义决策 ✅ **已定案（2026-09-17，随上游 ctlkit 迁移落地）**
 - **内容**：评审建议 `limit_out_=0` 默认改为"不限制"；但 wheel 已定案 **"0=disabled"惯例**（max_rate=0 关斜坡、thresh=0 关分离）——两者冲突
 - **决策点**：0 语义维持（文档写明坑）vs 改 sentinel vs 分层（0=中立 + preset）
 - **影响**：若改，牵动 wheel v0.2.0（已发布 v0.1.0 不可改）
@@ -223,7 +223,12 @@ generated: false
   `limit_out_ = 0` 会把输出**钳死**，于是「输出饱和」标志在**默认配置下恒为 true**（标志会骗人）。
   **P11 不定，D3 就不能落地。** 详见仓外 `~/Develop/Workspace/pid` 的 `optimization_considerations.md` D3。
   顺带：定 P11 的**签名**（加 getter vs 改 `calc()` 返回类型）时，**0 语义自然被一起定下来** —— 反而更容易拍。
-- **优先级**：🔴 高（真实踩坑风险，但改法需先拍板）
+- **2026-09-17 决议**：走**分层**方案（第三种）：限幅类 `limit_out_` / `limit_i_` 的 `<= 0` = **不限幅**；
+  特性开关类 `thresh_i_sep_ = 0` / `max_rate_out_ = 0` = **关闭**（PID 层）；`Ramp` 自身 `0` = **冻结**不变
+  （PID 关斜坡时在构造期归一化为无上限速率，两层不串）。
+  随之 **D3 的硬前置解除**：饱和标志改为「与未钳位量比较」，`limit_out_ = 0` 不再让标志恒为真。
+  落地位置：上游 ctlkit（vendor 在 `third_party/ctlkit/`，行为契约见其 spec）—— wheel 侧只改配置写法即完成跟随。
+- **优先级**：✅ 已结（原 🔴 高）
 
 ### P12. 防御校验 ⬜ 未开工
 - **内容**：OmniDrive 构造 `wn>6` 越界写 `J[6][3]`、`wn<2` 数学无意义——加断言/参数校验；twist_acc_limiter `reset()` 补测试
@@ -613,3 +618,20 @@ FK(measured_wheel_speeds).wz  −  gyro_z
   `Setpoints` / `Feedbacks` 类型别名（`DESIGN.md` §5.2 现在**有意**把它们钉在 `WheelSpeeds`）。
 - **接缝的形状不用改** —— 这正是 **D11** 抽对了的证据。
 - **优先级**：🟢 低（等 Swerve 立项，见 P21）
+
+## 2026-09-17 新增（上游算法库接入）
+
+### P29. `wheel` 组件加命名空间（接口卫生）⬜ 待做 —— 属下一个破坏性发布
+- **内容**：`actuator/wheel/inc/{pid,lpf,ramp,smooth_planner}.hpp` 里的类型**全在全局命名空间**
+  （`PID` / `PIDConfig` / `LPF` / `Ramp` / `SmoothPlanner`）—— 谁 include，谁被注入 8 个全局名。
+- **危害**（不是「代码坏了」，是接口债）：
+  1. 名字太通用 → 消费方自己定义一个 `PID` 就撞名；「一边 `using` 一边在别处自己定义」会落到 **ODR 隐患**（不报错的那种）
+  2. 头文件污染全局命名空间
+  3. 多库协同时无法消歧（`wheel::PID` vs `ctl::PID`）
+- **来由**：血缘是单工程嵌入式 C++（无 namespace 习惯）；cyclotron 侧搬运时加了 `foc::algo`，本仓一直没加。
+- **迁移后的现状（2026-09-17）**：风险**未变差**（迁移前这些名字本来就在全局）；但**修起来变便宜了** ——
+  定义已不在本仓（上游 ctlkit vendor 在 `third_party/ctlkit/`），收口只需改 4 个转发头
+  （全局 `using` → `namespace wheel { using ctl::PID; … }`），或干脆让消费方直接写 `ctl::PID` 并删掉转发头；
+  消费方漏改会被编译器逐条点名（不静默）。
+- **影响面**：`wheel.hpp` / `chassis_loop` / `fw_poc` / `KND_Trial` 的限定名；破坏性变更 → 建议与 P26 同批进 wheel 的下一次发布
+- **优先级**：🟢 低（不急，但趁转发头还在时改动面最小）
